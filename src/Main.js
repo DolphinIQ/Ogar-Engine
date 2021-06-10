@@ -1,4 +1,17 @@
-import { Renderer, Camera, Transform, Box, Program, Geometry, Mesh, Vec3, Orbit, RenderTarget } from 'ogl';
+// THREE
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+// CONTROLS
+import { Orbit } from './controls/orbitControlsOGL.js';
+
+// UTILITY
+import Stats from 'three/examples/jsm/libs/stats.module.js';
+import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
+import { WEBGL } from 'three/examples/jsm/WebGL.js';
+import { addMeshesInGrid } from './utils/shapes.js';
+
+
 import {
     createWorld,
     addEntity,
@@ -26,37 +39,78 @@ import {
 class Engine {
 
     constructor() {
-        console.log('OGAR initialized!');
+
+        // Detect WebGL support
+        if ( !WEBGL.isWebGL2Available() ) {
+            console.error("WebGL 2 is not available!");
+            let warning = WEBGL.getWebGLErrorMessage();
+            document.body.appendChild( warning );
+            return;
+        }
     }
 
-    init() {
+    /**
+     * 
+     * @param {DOM} element - element to append webgl canvas
+     */
+    init( element ) {
 
+        console.log('OGAR initialized!');
         let self = this;
 
-        this.renderer = new Renderer({ dpr: 2 });
-        const gl = this.renderer.gl;
-        document.body.appendChild(gl.canvas);
+        const settings = {
+            shadows: {
+                enabled: false,
 
-        this.scene = new Transform();
+            }
+        }
 
-        this.camera = new Camera(gl);
+        this.renderer = new THREE.WebGLRenderer({ precision: 'highp' });
+        this.renderer.setSize( window.innerWidth, window.innerHeight );
+        this._canvas = this.renderer.domElement;
+        element.appendChild( this._canvas );
+        if( settings.shadows.enabled ){ 
+            this.renderer.shadowMap.enabled = true;
+            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            // this.renderer.shadowMap.autoUpdate = false;
+        }
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+        this.renderer.physicallyCorrectLights = true;
+
+        this.scene = new THREE.Scene();
+
+        this.camera = new THREE.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
         this.camera.position.set( 0, 4, 8 );
 
         this.orbitControls = new Orbit( this.camera, {
-            target: new Vec3( 0, 0, 0 ),
+            element: this._canvas,
+            target: new THREE.Vector3()
         });
 
-        function resize() {
-            self.renderer.setSize( window.innerWidth, window.innerHeight );
-            self.camera.perspective({
-                aspect: gl.canvas.width / gl.canvas.height,
-            });
+        this._clock = new THREE.Clock();
+
+        //Stats
+        this._stats = new Stats();
+        element.appendChild( this._stats.dom );
+
+        //GUI
+        this._gui = new GUI();
+        // gui.add(object, property, [min], [max], [step])
+        
+        function onWindowResize(){
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
         }
-        window.addEventListener('resize', resize, false);
-        resize();
-        const geometry = new Box( gl );
-        const program = new Program( gl , {
-            vertex: /*glsl*/`#version 300 es
+        window.addEventListener('resize', onWindowResize, false);
+
+        const geometry = new THREE.BoxBufferGeometry( 1, 1, 1 );
+        const program = new THREE.RawShaderMaterial({
+            uniforms: {
+                ['uLightDirection']: { value: new THREE.Vector3( 3, 5, 6 ).normalize() },
+                ['uAmbientLightIntensity']: { value: 0.1 }
+            },
+            vertexShader: /*glsl*/`#version 300 es
                 precision highp float;
 
                 in vec3 position;
@@ -77,7 +131,7 @@ class Engine {
                     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
                 }
                 `,
-            fragment: /*glsl*/`#version 300 es
+            fragmentShader: /*glsl*/`#version 300 es
                 precision highp float;
 
                 in vec3 vNormal;
@@ -97,47 +151,35 @@ class Engine {
 
                     fragColor = vec4( finalColor, 1.0 );
                 }
-            `,
-            uniforms: {
-                ['uLightDirection']: { value: new Vec3( 3, 5, 6 ).normalize() },
-                ['uAmbientLightIntensity']: { value: 0.1 }
-            }
+            `
         });
+        // const program = new THREE.MeshNormalMaterial();
 
         const ROWS = 5;
         const DIST = 2;
-        addCubesRows( ROWS, ROWS, DIST, gl, geometry, program, this.scene );
+        addMeshesInGrid( ROWS, ROWS, DIST, geometry, program, this.scene );
         
-        const mesh = new Mesh(gl, {geometry, program});
+        const mesh = new THREE.Mesh( geometry, program );
         console.log( mesh );
-        // mesh.setParent(scene);
 
         this._stitchPrograms();
-        requestAnimationFrame( this.update.bind(this) );
-        // this.update();
+        requestAnimationFrame( this.animate.bind(this) );
     }
 
     _stitchPrograms() {
 
     }
 
-    update( delta ) {
+    animate() {
+        this._stats.begin();
 
-        requestAnimationFrame( this.update.bind(this) );
+        this._delta = this._clock.getDelta();
+
+        requestAnimationFrame( this.animate.bind(this) );
         this.orbitControls.update();
-        this.renderer.render({ scene: this.scene, camera: this.camera });
-    }
-}
+        this.renderer.render( this.scene, this.camera );
 
-function addCubesRows( rows, cols, distance, gl, geometry, program, scene ) {
-
-    for( let i = 0; i < rows; i++ ) {
-        for( let j = 0; j < cols; j++ ) {
-            const mesh = new Mesh( gl, { geometry, program } );
-            mesh.setParent( scene );
-            mesh.position.x = distance * (j - (rows - 1) / 2);
-            mesh.position.z = distance * (i - (cols - 1) / 2);
-        }
+        this._stats.end();
     }
 }
 
