@@ -40573,6 +40573,136 @@ GLTFCubicSplineInterpolant.prototype.interpolate_ = function ( i1, t0, t, t1 ) {
 
 };
 
+class OGARExporter {
+    constructor() {
+        this.downloadEl = document.createElement( 'a' );
+    }
+
+    export( data, fileName, mimeType ) {
+
+        // Put data into an array if it's not. Blob requires an array
+        data = Array.isArray( data ) ? data : [data];
+
+        // Default mimeType to binary
+        const blob = new Blob( data, { type: mimeType || "application/octet-stream" } );
+        const url = URL.createObjectURL( blob );
+        this.downloadEl.setAttribute( 'download', fileName + '.ogar' );
+        this.downloadEl.setAttribute( 'href', url );
+        this.downloadEl.click();
+    }
+
+    exportMesh( mesh, fileName = 'model' ) {
+        if( mesh.isMesh ) {
+
+            const json = {
+                type: 'mesh',
+                geometry: {
+
+                }
+            };
+            const buffers = [];
+
+            // Add standard attributes
+            let attributesCount = 0;
+            for( const attributeName in mesh.geometry.attributes ) {
+
+                const attribute = mesh.geometry.getAttribute( attributeName );
+                json.geometry[attributeName] = {
+                    bufferIndex: attributesCount,
+                    byteLength: attribute.array.byteLength,
+                    byteSizePerNumber: attribute.array.BYTES_PER_ELEMENT,
+                    itemSize: attribute.itemSize,
+                    typedArrayName: attribute.array.constructor.name
+                };
+                buffers.push( attribute.array.buffer );
+
+                attributesCount++;
+            }
+            // Add index attribute
+            if ( mesh.geometry.index ) {
+
+                json.geometry['index'] = {
+                    bufferIndex: attributesCount,
+                    byteLength: mesh.geometry.index.array.byteLength,
+                    byteSizePerNumber: mesh.geometry.index.array.BYTES_PER_ELEMENT,
+                    itemSize: mesh.geometry.index.itemSize,
+                    typedArrayName: mesh.geometry.index.array.constructor.name
+                };
+                buffers.push( mesh.geometry.index.array.buffer );
+            }
+
+            const data = [ JSON.stringify( json ) + " " ].concat( buffers );
+
+            // console.log( data );
+
+            this.export( data, fileName, "application/octet-stream" );
+
+        } else {
+            console.error('Model cannot be exported, for it is not a mesh');
+        }
+    }
+}
+
+class OGARLoader {
+    constructor() {
+
+    }
+
+    load( url = '' ) {
+
+        return new Promise( ( resolve, reject ) => {
+            fetch( url )
+                .then(response => response.arrayBuffer())
+                .then( ( buffer ) => {
+    
+                    const textToDecode = new Uint8Array( buffer );
+                    let bufferArray;
+                    
+                    // Avoid the String.fromCharCode.apply(null, array) shortcut, which
+                    // throws a "maximum call stack size exceeded" error for large arrays.
+                    let str = '';
+                    for ( let i = 0, il = textToDecode.length; i < il; i++ ) {
+                        const char = String.fromCharCode( textToDecode[ i ] );
+                        if ( char === ' ' ) { // space is a character separating json form buffer
+                            bufferArray = textToDecode.slice( i + 1, textToDecode.length ).buffer;
+                            break;
+                        }
+                        str += char;
+                    }
+    
+                    const json = JSON.parse( str );
+    
+                    // Reconstruct buffer geometry
+                    const modelGeometry = new BufferGeometry();
+                    let bufferIndex = 0;
+                    for ( const attributeName in json.geometry ) {
+    
+                        const attribute = json.geometry[attributeName];
+    
+                        const typedArray = new window[ attribute.typedArrayName ]( // some type of TypedArray
+                            bufferArray, 
+                            bufferIndex, 
+                            attribute.byteLength / attribute.byteSizePerNumber
+                        );
+    
+                        if ( attributeName === 'index' ) {
+                            modelGeometry.index = new BufferAttribute( typedArray, attribute.itemSize );
+                        } else {
+                            modelGeometry.setAttribute( attributeName, new BufferAttribute( typedArray, attribute.itemSize ) );
+                        }
+    
+                        bufferIndex += attribute.byteLength;
+                    }
+    
+                    // console.log({ buffer, textToDecode, str, json, bufferArray, modelGeometry });
+    
+                    resolve({ geometry: modelGeometry });
+                });
+
+        });
+    }
+}
+
 // https://github.com/oframe/ogl/blob/master/src/extras/Orbit.js converted to three.js
 
 const STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2, DOLLY_PAN: 3 };
@@ -44852,14 +44982,26 @@ class Engine {
                 }
             `
         });
-        // const program = new THREE.MeshNormalMaterial();
 
         const ROWS = 5;
         const DIST = 2;
         addMeshesInGrid( ROWS, ROWS, DIST, geometry, program, this.scene );
-        
-        const mesh = new Mesh( geometry, program );
-        console.log( mesh );
+
+        new OGARExporter();
+        const ogarLoader = new OGARLoader();
+
+        // const mesh = new THREE.Mesh( geometry, program );
+        // console.log( mesh );
+        // ogarExporter.exportMesh( mesh, 'cube' );
+        ogarLoader.load('http://localhost:8080/models/cube.ogar')
+            .then( ( asset ) => {
+
+                const loadedModel = new Mesh( asset.geometry, new MeshNormalMaterial() );
+                this.scene.add( loadedModel );
+                loadedModel.position.y = 2;
+                console.log( 'Model with loaded geometry:', loadedModel );
+            });
+
 
         this._stitchPrograms();
         requestAnimationFrame( this.animate.bind(this) );

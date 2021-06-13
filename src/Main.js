@@ -1,6 +1,10 @@
 // THREE
 import * as THREE from 'three';
+
+// LOADERS
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OGARExporter } from './loaders/OGARExporter.js';
+import { OGARLoader } from './loaders/OGARLoader.js';
 
 // CONTROLS
 import { Orbit } from './controls/orbitControlsOGL.js';
@@ -153,14 +157,26 @@ class Engine {
                 }
             `
         });
-        // const program = new THREE.MeshNormalMaterial();
 
         const ROWS = 5;
         const DIST = 2;
         addMeshesInGrid( ROWS, ROWS, DIST, geometry, program, this.scene );
-        
-        const mesh = new THREE.Mesh( geometry, program );
-        console.log( mesh );
+
+        const ogarExporter = new OGARExporter();
+        const ogarLoader = new OGARLoader();
+
+        // const mesh = new THREE.Mesh( geometry, program );
+        // console.log( mesh );
+        // ogarExporter.exportMesh( mesh, 'cube' );
+        ogarLoader.load('http://localhost:8080/models/cube.ogar')
+            .then( ( asset ) => {
+
+                const loadedModel = new THREE.Mesh( asset.geometry, new THREE.MeshNormalMaterial() );
+                this.scene.add( loadedModel );
+                loadedModel.position.y = 2;
+                console.log( 'Model with loaded geometry:', loadedModel );
+            });
+
 
         this._stitchPrograms();
         requestAnimationFrame( this.animate.bind(this) );
@@ -183,4 +199,4 @@ class Engine {
     }
 }
 
-export { Engine };
+export { Engine, OGARExporter, OGARLoader };

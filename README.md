@@ -10,7 +10,7 @@
 
 ## [ECS](https://en.wikipedia.org/wiki/Entity_component_system) Deferred Rendering Engine
 
-**Ogar** is the name of my cat 😼 pronounced as: https://translate.google.com/?hl=pl&sl=pl&tl=en&text=ogar&op=translate
+**Ogar** 😼 is pronounced as: https://translate.google.com/?hl=pl&sl=pl&tl=en&text=ogar&op=translate
 
 Not ready to use yet
 
