@@ -22,4 +22,22 @@ const engine = new OGAR.Engine();
 engine.init( document.body );
 ```
 
+### Export and Import binary .ogar files:
+```js
+const ogarExporter = new OGAR.OGARExporter();
+const ogarLoader = new OGAR.OGARLoader();
+
+const mesh = new THREE.Mesh( someGeometry, someMaterial );
+
+// Export and save mesh into 'cube.ogar' 3d model
+ogarExporter.exportMesh( mesh, 'cube' );
+
+// Load 'cube.ogar' 3d model
+ogarLoader.load('cube.ogar')
+    .then( ( asset ) => {
+        const loadedModel = new THREE.Mesh( asset.geometry, someMaterial );
+        engine.scene.add( loadedModel );
+    });
+```
+
 ###### FIRST EVER OGAR ENGINE

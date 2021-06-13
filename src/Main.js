@@ -162,22 +162,6 @@ class Engine {
         const DIST = 2;
         addMeshesInGrid( ROWS, ROWS, DIST, geometry, program, this.scene );
 
-        const ogarExporter = new OGARExporter();
-        const ogarLoader = new OGARLoader();
-
-        // const mesh = new THREE.Mesh( geometry, program );
-        // console.log( mesh );
-        // ogarExporter.exportMesh( mesh, 'cube' );
-        ogarLoader.load('http://localhost:8080/models/cube.ogar')
-            .then( ( asset ) => {
-
-                const loadedModel = new THREE.Mesh( asset.geometry, new THREE.MeshNormalMaterial() );
-                this.scene.add( loadedModel );
-                loadedModel.position.y = 2;
-                console.log( 'Model with loaded geometry:', loadedModel );
-            });
-
-
         this._stitchPrograms();
         requestAnimationFrame( this.animate.bind(this) );
     }
@@ -199,4 +183,4 @@ class Engine {
     }
 }
 
-export { Engine, OGARExporter, OGARLoader };
+export { Engine, THREE, OGARExporter, OGARLoader };

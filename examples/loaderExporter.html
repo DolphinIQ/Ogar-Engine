@@ -23,11 +23,40 @@
     
     <script type="module">
         import * as OGAR from './dist/OGAR.module.js';
+        const THREE = OGAR.THREE;
 
-        console.log( OGAR );
+        let engine;
+        let ogarExporter, ogarLoader;
 
-        const engine = new OGAR.Engine();
-        engine.init( document.body );
+        init();
+        function init() {
+
+            console.log( OGAR );
+
+            engine = new OGAR.Engine();
+            engine.init( document.body );
+
+            ogarExporter = new OGAR.OGARExporter();
+            ogarLoader = new OGAR.OGARLoader();
+
+            const geometry = new THREE.BoxBufferGeometry( 1, 1, 1 );
+            const material = new THREE.MeshNormalMaterial();
+            const mesh = new THREE.Mesh( geometry, material );
+            console.log( 'Original model:', mesh );
+
+            // Uncomment to save cube mesh into 'cube.ogar' 3d model
+            // ogarExporter.exportMesh( mesh, 'cube' );
+
+            ogarLoader.load('http://localhost:8080/models/cube.ogar')
+                .then( ( asset ) => {
+
+                    const loadedModel = new THREE.Mesh( asset.geometry, material );
+                    engine.scene.add( loadedModel );
+                    loadedModel.position.y = 2;
+                    console.log( 'Model with the loaded geometry:', loadedModel );
+                });
+        }
+
     </script>
 </body>
 </html>
