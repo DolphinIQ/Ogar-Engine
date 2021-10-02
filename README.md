@@ -12,7 +12,7 @@
 
 **Ogar** 😼 is pronounced as: https://translate.google.com/?hl=pl&sl=pl&tl=en&text=ogar&op=translate
 
-⚠️ Engine not ready for use yet ⚠️
+⚠️ Under development! Engine not ready for use yet! ⚠️
 
 ## How to run the examples:
 1. Fork the repository
@@ -29,12 +29,30 @@ npm run start
 ```
 4. Navigate to 'http://localhost:8080/' and select an example to run
 
-## 📖 API so far:
+## 📖 API and Usage so far:
 ```js
 import * as OGAR from './dist/OGAR.module.js';
 
+// Creates a full-screen canvas accessible as engine.canvas
 const engine = new OGAR.Engine();
 engine.init( document.body );
+
+const scene = new OGAR.THREE.Scene();
+const camera = new OGAR.THREE.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
+
+const geometry = new OGAR.THREE.BoxBufferGeometry( 1, 1, 1 );
+const material = new OGAR.gBufferMaterial({ // The only supported material for now
+    ['uCameraNear']: { value: camera.near }, // Required
+    ['uCameraFar']: { value: camera.far }, // Required
+    ['tDiffuse']: { value: diffuseTexture } // Optional
+});
+const mesh = new OGAR.THREE.Mesh( geometry, material );
+scene.add( mesh );
+
+function animate() { // Your loop
+    engine.render( scene, camera );
+    requestAnimationFrame( animate );
+}
 ```
 
 ### 🕋 Export and Import binary .ogar files:
