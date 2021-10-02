@@ -30,6 +30,7 @@ npm run start
 4. Navigate to 'http://localhost:8080/' and select an example to run
 
 ## 📖 API and Usage so far:
+( For a full working example see `examples/basicScene.html` )
 ```js
 import * as OGAR from './dist/OGAR.module.js';
 
@@ -49,9 +50,9 @@ const material = new OGAR.gBufferMaterial({ // The only supported material for n
 const mesh = new OGAR.THREE.Mesh( geometry, material );
 scene.add( mesh );
 
-function animate() { // Your loop
+function animate() { // Inside your animation loop
+    ...
     engine.render( scene, camera );
-    requestAnimationFrame( animate );
 }
 ```
 
@@ -73,4 +74,4 @@ ogarLoader.load('cube.ogar')
     });
 ```
 
-###### FIRST EVER OGAR ENGINE
+###### 2021 FIRST EVER OGAR ENGINE
