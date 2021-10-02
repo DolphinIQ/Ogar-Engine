@@ -5,19 +5,24 @@
 // TODO: make scroll zoom more accurate than just >/< zero
 // TODO: be able to pass in new camera position
 
-import { Vector3, Vector2 } from 'three';
+// import { Vector3, Vector2 } from 'three';
 
 const STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2, DOLLY_PAN: 3 };
-const tempVec3 = new Vector3();
-const tempVec2a = new Vector2();
-const tempVec2b = new Vector2();
+// const tempVec3 = new Vector3();
+// const tempVec2a = new Vector2();
+// const tempVec2b = new Vector2();
+let tempVec3;
+let tempVec2a;
+let tempVec2b;
 
 export function Orbit(
     object,
     {
+        Vector2,
+        Vector3,
         element = document,
         enabled = true,
-        target = new Vector3(),
+        target,
         ease = 0.25,
         inertia = 0.85,
         enableRotate = true,
@@ -33,11 +38,15 @@ export function Orbit(
         minAzimuthAngle = -Infinity,
         maxAzimuthAngle = Infinity,
         minDistance = 0,
-        maxDistance = Infinity,
+        maxDistance = Infinity
     } = {}
 ) {
+    tempVec3 = new Vector3();
+    tempVec2a = new Vector2();
+    tempVec2b = new Vector2();
+
     this.enabled = enabled;
-    this.target = target;
+    this.target = target || new Vector3();
 
     // Catch attempts to disable - set to 1 so has no effect
     ease = ease || 1;

@@ -20,14 +20,104 @@
     </style>
 </head>
 <body>
-    
+
     <script type="module">
+        // ENGINE
         import * as OGAR from './dist/OGAR.module.js';
+
+        // CONTROLS
+        import { Orbit } from './utils/orbitControlsOGL.js';
+
+        // UTILITY
+        import Stats from './utils/stats.module.js';
+        import { GUI } from './utils/dat.gui.module.js';
 
         console.log( OGAR );
 
-        const engine = new OGAR.Engine();
-        engine.init( document.body );
+        let engine, scene, camera, clock, delta;
+        let orbitControls, stats, gui;
+        let textureLoader;
+
+        init();
+
+        function init() {
+
+            // Creates a full-screen canvas accessible as engine.canvas
+            engine = new OGAR.Engine();
+            engine.init( document.body );
+
+            scene = new OGAR.THREE.Scene();
+
+            camera = new OGAR.THREE.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
+            camera.position.set( 0, 4, 8 );
+
+            orbitControls = new Orbit( camera, {
+                Vector2: OGAR.THREE.Vector2,
+                Vector3: OGAR.THREE.Vector3,
+                element: engine.canvas,
+                target: new OGAR.THREE.Vector3()
+            });
+
+            clock = new OGAR.THREE.Clock();
+
+            // Stats
+            stats = new Stats();
+            document.body.appendChild( stats.dom );
+
+            // GUI
+            gui = new GUI();
+            // gui.add(object, property, [min], [max], [step])
+
+            // Loaders
+            textureLoader = new OGAR.THREE.TextureLoader();
+
+            const diffuseTexture = textureLoader.load('textures/ogar_hi.png');
+
+            const geometry = new OGAR.THREE.BoxBufferGeometry( 1, 1, 1 );
+            const material = new OGAR.gBufferMaterial({
+                ['uCameraNear']: { value: camera.near },
+                ['uCameraFar']: { value: camera.far },
+                ['tDiffuse']: { value: diffuseTexture }
+            });
+
+            const ROWS = 5;
+            const DISTANCE = 2;
+            addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
+            const mesh = new OGAR.THREE.Mesh( geometry, material );
+            console.log( mesh );
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            requestAnimationFrame( animate );
+        }
+
+        function addMeshesInGrid( rows, cols, distance, geometry, material, scene ) {
+            for( let i = 0; i < rows; i++ ) {
+                for( let j = 0; j < cols; j++ ) {
+                    const mesh = new OGAR.THREE.Mesh( geometry, material );
+                    mesh.position.x = distance * (j - (rows - 1) / 2);
+                    mesh.position.z = distance * (i - (cols - 1) / 2);
+                    scene.add( mesh );
+                }
+            }
+        }
+
+        function animate() {
+            stats.begin();
+
+            delta = clock.getDelta();
+            orbitControls.update();
+
+            engine.render( scene, camera );
+
+            requestAnimationFrame( animate );
+            stats.end();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        }
     </script>
 </body>
 </html>

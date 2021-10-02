@@ -6,37 +6,38 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OGARExporter } from './loaders/OGARExporter.js';
 import { OGARLoader } from './loaders/OGARLoader.js';
 
-// CONTROLS
-import { Orbit } from './controls/orbitControlsOGL.js';
+// SHADERS
+import { basicVertex } from './shaders/basicVertex.glsl.js';
+import { finalRenderFragment } from './shaders/finalRender.glsl.js';
+
+// MATERIALS
+import { gBufferMaterial } from './materials/gBufferMaterial.js';
 
 // UTILITY
-import Stats from 'three/examples/jsm/libs/stats.module.js';
-import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
 import { WEBGL } from 'three/examples/jsm/WebGL.js';
-import { addMeshesInGrid } from './utils/shapes.js';
 
 
 import {
     createWorld,
     addEntity,
     removeEntity,
-  
+
     defineComponent,
     addComponent,
     removeComponent,
     hasComponent,
-    
+
     defineQuery,
     Changed,
     Not,
     enterQuery,
     exitQuery,
-    
+
     defineSystem,
-    
+
     defineSerializer,
     defineDeserializer,
-  
+
     pipe,
 } from 'bitecs';
 
@@ -65,14 +66,13 @@ class Engine {
         const settings = {
             shadows: {
                 enabled: false,
-
             }
         }
 
         this.renderer = new THREE.WebGLRenderer({ precision: 'highp' });
         this.renderer.setSize( window.innerWidth, window.innerHeight );
-        this._canvas = this.renderer.domElement;
-        element.appendChild( this._canvas );
+        this.canvas = this.renderer.domElement;
+        element.appendChild( this.canvas );
         if( settings.shadows.enabled ){ 
             this.renderer.shadowMap.enabled = true;
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -81,106 +81,76 @@ class Engine {
         this.renderer.outputEncoding = THREE.sRGBEncoding;
         this.renderer.physicallyCorrectLights = true;
 
-        this.scene = new THREE.Scene();
+        // Create a multi render target with Float buffers
+		this._MRT = new THREE.WebGLMultipleRenderTargets(
+			window.innerWidth, // * window.devicePixelRatio,
+			window.innerHeight, // * window.devicePixelRatio,
+			3
+		);
 
-        this.camera = new THREE.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
-        this.camera.position.set( 0, 4, 8 );
+		for ( let i = 0, il = this._MRT.texture.length; i < il; i ++ ) {
 
-        this.orbitControls = new Orbit( this.camera, {
-            element: this._canvas,
-            target: new THREE.Vector3()
-        });
+			this._MRT.texture[ i ].minFilter = THREE.NearestFilter;
+			this._MRT.texture[ i ].magFilter = THREE.NearestFilter;
+			this._MRT.texture[ i ].type = THREE.FloatType;
+		}
 
-        this._clock = new THREE.Clock();
+		// Name our G-Buffer attachments for debugging
+		this._MRT.texture[ 0 ].name = 'position';
+		this._MRT.texture[ 1 ].name = 'normal';
+		this._MRT.texture[ 2 ].name = 'diffuse';
 
-        //Stats
-        this._stats = new Stats();
-        element.appendChild( this._stats.dom );
-
-        //GUI
-        this._gui = new GUI();
-        // gui.add(object, property, [min], [max], [step])
-        
-        function onWindowResize(){
-            renderer.setSize( window.innerWidth, window.innerHeight );
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-        }
-        window.addEventListener('resize', onWindowResize, false);
-
-        const geometry = new THREE.BoxBufferGeometry( 1, 1, 1 );
-        const program = new THREE.RawShaderMaterial({
-            uniforms: {
-                ['uLightDirection']: { value: new THREE.Vector3( 3, 5, 6 ).normalize() },
-                ['uAmbientLightIntensity']: { value: 0.1 }
-            },
-            vertexShader: /*glsl*/`#version 300 es
-                precision highp float;
-
-                in vec3 position;
-                in vec3 normal;
-                in vec2 uv;
-
-                uniform mat4 modelViewMatrix;
-                uniform mat4 projectionMatrix;
-                uniform mat3 normalMatrix;
-
-                out vec3 vNormal;
-                out vec2 vUv;
-
-                void main() {
-                    vNormal = normal;
-                    vUv = uv;
-
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-                `,
-            fragmentShader: /*glsl*/`#version 300 es
-                precision highp float;
-
-                in vec3 vNormal;
-                in vec2 vUv;
-
-                uniform vec3 uLightDirection;
-                uniform float uAmbientLightIntensity;
-
-                out vec4 fragColor;
-
-                void main() {
-                    vec3 normal = normalize( vNormal );
-                    vec3 diffuse = vec3( 1.0 );
-                    float lightContribution = max( dot( normal, uLightDirection ), 0.0 ) + uAmbientLightIntensity;
-
-                    vec3 finalColor = diffuse * lightContribution;
-
-                    fragColor = vec4( finalColor, 1.0 );
-                }
-            `
-        });
-
-        const ROWS = 5;
-        const DIST = 2;
-        addMeshesInGrid( ROWS, ROWS, DIST, geometry, program, this.scene );
+        // PostProcessing quad setup
+        this._postProcessing = {};
+		this._postProcessing.scene = new THREE.Scene();
+		this._postProcessing.camera = new THREE.OrthographicCamera( - 1, 1, 1, - 1, 0, 1 );
+        this._postProcessing.quad = new THREE.Mesh(
+			new THREE.PlaneGeometry( 2, 2 ),
+			new THREE.RawShaderMaterial({
+				vertexShader: basicVertex.trim(),
+				fragmentShader: finalRenderFragment.trim(),
+				uniforms: {
+                    tPosition: { value: this._MRT.texture[ 0 ] },
+					tNormal: { value: this._MRT.texture[ 1 ] },
+					tDiffuse: { value: this._MRT.texture[ 2 ] }
+				},
+				// glslVersion: THREE.GLSL3
+			})
+        );
+		this._postProcessing.scene.add( this._postProcessing.quad );
 
         this._stitchPrograms();
-        requestAnimationFrame( this.animate.bind(this) );
+        
+        let onWindowResize = () => {
+            this.renderer.setSize( window.innerWidth, window.innerHeight );
+			// const dpr = this.renderer.getPixelRatio();
+			this._MRT.setSize( window.innerWidth, window.innerHeight );
+			// this.render();
+        }
+        window.addEventListener('resize', onWindowResize, false);
     }
 
-    _stitchPrograms() {
+    _stitchPrograms() { // TODO
 
     }
 
-    animate() {
-        this._stats.begin();
+    render( scene, camera ) {
+        // render scene into Multiple Render Targets
+		this.renderer.setRenderTarget( this._MRT );
+		this.renderer.render( scene, camera );
 
-        this._delta = this._clock.getDelta();
+		// render post FX
+		this.renderer.setRenderTarget( null );
+		this.renderer.render( this._postProcessing.scene, this._postProcessing.camera );
+    }
 
-        requestAnimationFrame( this.animate.bind(this) );
-        this.orbitControls.update();
-        this.renderer.render( this.scene, this.camera );
+    setSizeMRT( width, height ) { // TODO: use this once engine supports canvas size other than full window
 
-        this._stats.end();
     }
 }
 
-export { Engine, THREE, OGARExporter, OGARLoader };
+export { 
+    Engine, THREE,
+    OGARExporter, OGARLoader,
+    gBufferMaterial
+};
