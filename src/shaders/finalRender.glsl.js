@@ -12,6 +12,7 @@ const finalRenderFragment = /*glsl*/`#version 300 es
 
     void main() {
         vec2 uv = vUv;
+        float materialID = texture( tNormal, uv ).a * 255.0;
         vec3 position = texture( tPosition, uv ).xyz;
         float depth = texture( tPosition, uv ).a;
         vec3 normal = texture( tNormal, uv ).xyz;

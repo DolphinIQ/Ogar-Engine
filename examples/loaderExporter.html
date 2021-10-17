@@ -22,7 +22,7 @@
 <body>
     
     <script type="module">
-        import * as OGAR from './dist/OGAR.module.js';
+        import { OGAR } from './dist/OGAR.module.js';
 
         let engine;
         let ogarExporter, ogarLoader;
@@ -38,9 +38,9 @@
             ogarExporter = new OGAR.OGARExporter();
             ogarLoader = new OGAR.OGARLoader();
 
-            const geometry = new OGAR.THREE.BoxBufferGeometry( 1, 1, 1 );
-            const material = new OGAR.THREE.MeshNormalMaterial();
-            const mesh = new OGAR.THREE.Mesh( geometry, material );
+            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
+            const material = new OGAR.MeshNormalMaterial();
+            const mesh = new OGAR.Mesh( geometry, material );
             console.log( 'Original model:', mesh );
 
             // Uncomment to save cube mesh into 'cube.ogar' 3d model
@@ -49,7 +49,7 @@
             ogarLoader.load('http://localhost:8080/models/cube.ogar')
                 .then( ( asset ) => {
 
-                    const loadedModel = new OGAR.THREE.Mesh( asset.geometry, material );
+                    const loadedModel = new OGAR.Mesh( asset.geometry, material );
                     console.log( 'Model with the loaded geometry:', loadedModel );
                 });
         }

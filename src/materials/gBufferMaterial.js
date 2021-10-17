@@ -18,6 +18,8 @@ class gBufferMaterial extends RawShaderMaterial {
  */
     constructor( uniforms ) {
 
+        uniforms['uMaterialID'] = { value: 0 }; // 0-255
+
         super({
             uniforms,
             vertexShader: gBufferVertex.trim(),

@@ -49497,7 +49497,7 @@ if ( typeof window !== 'undefined' ) {
 
 }
 
-var three_module = /*#__PURE__*/Object.freeze({
+var THREE = /*#__PURE__*/Object.freeze({
 	__proto__: null,
 	ACESFilmicToneMapping: ACESFilmicToneMapping,
 	AddEquation: AddEquation,
@@ -50206,6 +50206,7 @@ const finalRenderFragment = /*glsl*/`#version 300 es
 
     void main() {
         vec2 uv = vUv;
+        float materialID = texture( tNormal, uv ).a * 255.0;
         vec3 position = texture( tPosition, uv ).xyz;
         float depth = texture( tPosition, uv ).a;
         vec3 normal = texture( tNormal, uv ).xyz;
@@ -50260,6 +50261,7 @@ const gBufferFragment = /*glsl*/`#version 300 es
     uniform sampler2D tDiffuse;
     uniform float uCameraNear;
     uniform float uCameraFar;
+    uniform uint uMaterialID;
 
     in vec3 vPosition;
     in vec3 vNormal;
@@ -50285,8 +50287,9 @@ const gBufferFragment = /*glsl*/`#version 300 es
         vec4 color = texture( tDiffuse, uv );
 
         // Write position, depth, normal and color data to G-Buffer
+        uint range8bit = uint(255);
         gPosition = vec4( position, depth );
-        gNormal = vec4( normal, 1.0 );
+        gNormal = vec4( normal, uMaterialID / range8bit );
         gColor = color;
     }
 `;
@@ -50304,6 +50307,8 @@ class gBufferMaterial extends RawShaderMaterial {
  * - tDiffuse - diffuse map
  */
     constructor( uniforms ) {
+
+        uniforms['uMaterialID'] = { value: 0 }; // 0-255
 
         super({
             uniforms,
@@ -50407,6 +50412,16 @@ class WEBGL {
 
 class Engine {
 
+    #_renderer;
+    #_MRT;
+    #_postProcessing;
+
+    #_materials;
+    #_geometries;
+    #_textures;
+    #_meshes;
+    #_lights;
+
     constructor() {
 
         // Detect WebGL support
@@ -50426,74 +50441,86 @@ class Engine {
 
         console.log('OGAR initialized!');
 
-        this.renderer = new WebGLRenderer({ precision: 'highp' });
-        this.renderer.setSize( window.innerWidth, window.innerHeight );
-        this.canvas = this.renderer.domElement;
+        this.#_materials = new Set();
+        this.#_geometries = new Set();
+        this.#_textures = new Set();
+        this.#_meshes = new Set();
+        this.#_lights = new Set();
+
+        this.#_renderer = new WebGLRenderer({ precision: 'highp' });
+        this.#_renderer.setSize( window.innerWidth, window.innerHeight );
+        this.canvas = this.#_renderer.domElement;
         element.appendChild( this.canvas );
-        this.renderer.outputEncoding = sRGBEncoding;
-        this.renderer.physicallyCorrectLights = true;
+        this.#_renderer.outputEncoding = sRGBEncoding;
+        this.#_renderer.physicallyCorrectLights = true;
 
         // Create a multi render target with Float buffers
-		this._MRT = new WebGLMultipleRenderTargets(
+		this.#_MRT = new WebGLMultipleRenderTargets(
 			window.innerWidth, // * window.devicePixelRatio,
 			window.innerHeight, // * window.devicePixelRatio,
 			3
 		);
 
-		for ( let i = 0, il = this._MRT.texture.length; i < il; i ++ ) {
+		for ( let i = 0, il = this.#_MRT.texture.length; i < il; i ++ ) {
 
-			this._MRT.texture[ i ].minFilter = NearestFilter;
-			this._MRT.texture[ i ].magFilter = NearestFilter;
-			this._MRT.texture[ i ].type = FloatType;
+			this.#_MRT.texture[ i ].minFilter = NearestFilter;
+			this.#_MRT.texture[ i ].magFilter = NearestFilter;
+			this.#_MRT.texture[ i ].type = FloatType;
 		}
 
 		// Name our G-Buffer attachments for debugging
-		this._MRT.texture[ 0 ].name = 'position';
-		this._MRT.texture[ 1 ].name = 'normal';
-		this._MRT.texture[ 2 ].name = 'diffuse';
+		this.#_MRT.texture[ 0 ].name = 'position';
+		this.#_MRT.texture[ 1 ].name = 'normal';
+		this.#_MRT.texture[ 2 ].name = 'diffuse';
 
         // PostProcessing quad setup
-        this._postProcessing = {};
-		this._postProcessing.scene = new Scene();
-		this._postProcessing.camera = new OrthographicCamera( - 1, 1, 1, - 1, 0, 1 );
-        this._postProcessing.quad = new Mesh(
+        this.#_postProcessing = {};
+		this.#_postProcessing.scene = new Scene();
+		this.#_postProcessing.camera = new OrthographicCamera( -1, 1, 1, -1, 0, 1 );
+        this.#_postProcessing.quad = new Mesh(
 			new PlaneGeometry( 2, 2 ),
 			new RawShaderMaterial({
 				vertexShader: basicVertex.trim(),
 				fragmentShader: finalRenderFragment.trim(),
 				uniforms: {
-                    tPosition: { value: this._MRT.texture[ 0 ] },
-					tNormal: { value: this._MRT.texture[ 1 ] },
-					tDiffuse: { value: this._MRT.texture[ 2 ] }
+                    tPosition: { value: this.#_MRT.texture[ 0 ] },
+					tNormal: { value: this.#_MRT.texture[ 1 ] },
+					tDiffuse: { value: this.#_MRT.texture[ 2 ] }
 				},
 				// glslVersion: THREE.GLSL3
 			})
         );
-		this._postProcessing.scene.add( this._postProcessing.quad );
+		this.#_postProcessing.scene.add( this.#_postProcessing.quad );
 
-        this._stitchPrograms();
+        this.#_stitchPrograms();
+        this.#_overrideTHREE();
         
         let onWindowResize = () => {
-            this.renderer.setSize( window.innerWidth, window.innerHeight );
-			// const dpr = this.renderer.getPixelRatio();
-			this._MRT.setSize( window.innerWidth, window.innerHeight );
+            this.#_renderer.setSize( window.innerWidth, window.innerHeight );
+			// const dpr = this.#_renderer.getPixelRatio();
+			this.#_MRT.setSize( window.innerWidth, window.innerHeight );
 			// this.render();
         };
         window.addEventListener('resize', onWindowResize, false);
     }
 
-    _stitchPrograms() { // TODO
+    // Extends some THREE.JS classes for the purposes of the engine
+    #_overrideTHREE() {
+        // THREE.Mesh = Mesh;
+    }
+
+    #_stitchPrograms() { // TODO
 
     }
 
     render( scene, camera ) {
         // render scene into Multiple Render Targets
-		this.renderer.setRenderTarget( this._MRT );
-		this.renderer.render( scene, camera );
+		this.#_renderer.setRenderTarget( this.#_MRT );
+		this.#_renderer.render( scene, camera );
 
 		// render post FX
-		this.renderer.setRenderTarget( null );
-		this.renderer.render( this._postProcessing.scene, this._postProcessing.camera );
+		this.#_renderer.setRenderTarget( null );
+		this.#_renderer.render( this.#_postProcessing.scene, this.#_postProcessing.camera );
     }
 
     setSizeMRT( width, height ) { // TODO: use this once engine supports canvas size other than full window
@@ -50501,4 +50528,11 @@ class Engine {
     }
 }
 
-export { Engine, OGARExporter, OGARLoader, three_module as THREE, gBufferMaterial };
+const OGAR = { 
+    Engine,
+    OGARExporter, OGARLoader,
+    gBufferMaterial
+};
+Object.assign( OGAR, THREE );
+
+export { OGAR };

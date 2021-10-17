@@ -32,22 +32,22 @@ npm run start
 ## 📖 API and Usage so far:
 ( For a full working example see `examples/basicScene.html` )
 ```js
-import * as OGAR from './dist/OGAR.module.js';
+import { OGAR } from './dist/OGAR.module.js';
 
 // Creates a full-screen canvas accessible as engine.canvas
 const engine = new OGAR.Engine();
 engine.init( document.body );
 
-const scene = new OGAR.THREE.Scene();
-const camera = new OGAR.THREE.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
+const scene = new OGAR.Scene();
+const camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
 
-const geometry = new OGAR.THREE.BoxBufferGeometry( 1, 1, 1 );
+const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
 const material = new OGAR.gBufferMaterial({ // The only supported material for now
     ['uCameraNear']: { value: camera.near }, // Required
     ['uCameraFar']: { value: camera.far }, // Required
     ['tDiffuse']: { value: diffuseTexture } // Optional
 });
-const mesh = new OGAR.THREE.Mesh( geometry, material );
+const mesh = new OGAR.Mesh( geometry, material );
 scene.add( mesh );
 
 function animate() { // Inside your animation loop
@@ -61,7 +61,7 @@ function animate() { // Inside your animation loop
 const ogarExporter = new OGAR.OGARExporter();
 const ogarLoader = new OGAR.OGARLoader();
 
-const mesh = new THREE.Mesh( someGeometry, someMaterial );
+const mesh = new OGAR.Mesh( someGeometry, someMaterial );
 
 // Export and save mesh into 'cube.ogar' 3d model
 ogarExporter.exportMesh( mesh, 'cube' );
@@ -69,7 +69,7 @@ ogarExporter.exportMesh( mesh, 'cube' );
 // Load 'cube.ogar' 3d model
 ogarLoader.load('cube.ogar')
     .then( ( asset ) => {
-        const loadedModel = new THREE.Mesh( asset.geometry, someMaterial );
+        const loadedModel = new OGAR.Mesh( asset.geometry, someMaterial );
         engine.scene.add( loadedModel );
     });
 ```

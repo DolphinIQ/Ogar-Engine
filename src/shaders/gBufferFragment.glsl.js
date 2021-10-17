@@ -5,6 +5,7 @@ const gBufferFragment = /*glsl*/`#version 300 es
     uniform sampler2D tDiffuse;
     uniform float uCameraNear;
     uniform float uCameraFar;
+    uniform uint uMaterialID;
 
     in vec3 vPosition;
     in vec3 vNormal;
@@ -30,8 +31,9 @@ const gBufferFragment = /*glsl*/`#version 300 es
         vec4 color = texture( tDiffuse, uv );
 
         // Write position, depth, normal and color data to G-Buffer
+        uint range8bit = uint(255);
         gPosition = vec4( position, depth );
-        gNormal = vec4( normal, 1.0 );
+        gNormal = vec4( normal, uMaterialID / range8bit );
         gColor = color;
     }
 `;
