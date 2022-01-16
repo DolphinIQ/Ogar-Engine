@@ -1,5 +1,7 @@
 // THREE
 import * as THREE from 'three';
+// import * as Threejs from 'three';
+// const THREE = Object.assign( THREE, Threejs );
 
 // LOADERS
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -47,11 +49,11 @@ class Engine {
     #_MRT;
     #_postProcessing;
 
-    #_materials;
-    #_geometries;
-    #_textures;
-    #_meshes;
-    #_lights;
+    // #_materials;
+    // #_geometries;
+    // #_textures;
+    // #_meshes;
+    // #_lights;
 
     constructor() {
 
@@ -68,7 +70,7 @@ class Engine {
      * 
      * @param {DOM} element - element to append webgl canvas
      */
-    init( element ) {
+    init( element, ogar ) {
 
         console.log('OGAR initialized!');
         let self = this;
@@ -79,11 +81,11 @@ class Engine {
             }
         }
 
-        this.#_materials = new Set();
-        this.#_geometries = new Set();
-        this.#_textures = new Set();
-        this.#_meshes = new Set();
-        this.#_lights = new Set();
+        this.materials = new Set();
+        this.geometries = new Set();
+        this.textures = new Set();
+        this.meshes = new Set();
+        this.lights = new Set();
 
         this.#_renderer = new THREE.WebGLRenderer({ precision: 'highp' });
         this.#_renderer.setSize( window.innerWidth, window.innerHeight );
@@ -101,7 +103,7 @@ class Engine {
 		this.#_MRT = new THREE.WebGLMultipleRenderTargets(
 			window.innerWidth, // * window.devicePixelRatio,
 			window.innerHeight, // * window.devicePixelRatio,
-			3
+			4
 		);
 
 		for ( let i = 0, il = this.#_MRT.texture.length; i < il; i ++ ) {
@@ -115,28 +117,55 @@ class Engine {
 		this.#_MRT.texture[ 0 ].name = 'position';
 		this.#_MRT.texture[ 1 ].name = 'normal';
 		this.#_MRT.texture[ 2 ].name = 'diffuse';
+		this.#_MRT.texture[ 3 ].name = 'specular';
 
         // PostProcessing quad setup
         this.#_postProcessing = {};
 		this.#_postProcessing.scene = new THREE.Scene();
 		this.#_postProcessing.camera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
+
+		this.#_postProcessing.finalShader = new THREE.RawShaderMaterial({
+            vertexShader: basicVertex.trim(),
+            fragmentShader: finalRenderFragment.trim(),
+            uniforms: {
+                tPosition: { value: this.#_MRT.texture[ 0 ] },
+                tNormal: { value: this.#_MRT.texture[ 1 ] },
+                tDiffuse: { value: this.#_MRT.texture[ 2 ] },
+                tSpecular: { value: this.#_MRT.texture[ 3 ] },
+                uCameraPosition: { value: new THREE.Vector3() },
+                materials: { value: [
+                    {
+                        unlit: true,
+                        diffuse: new THREE.Vector3( 1, 1, 1 ),
+                        specularColor: new THREE.Vector3( 0.1, 0.1, 0.1 ),
+                        shininess: 0
+                    }
+                ] }
+            },
+            // glslVersion: THREE.GLSL3
+        });
         this.#_postProcessing.quad = new THREE.Mesh(
 			new THREE.PlaneGeometry( 2, 2 ),
-			new THREE.RawShaderMaterial({
-				vertexShader: basicVertex.trim(),
-				fragmentShader: finalRenderFragment.trim(),
-				uniforms: {
-                    tPosition: { value: this.#_MRT.texture[ 0 ] },
-					tNormal: { value: this.#_MRT.texture[ 1 ] },
-					tDiffuse: { value: this.#_MRT.texture[ 2 ] }
-				},
-				// glslVersion: THREE.GLSL3
-			})
+            this.#_postProcessing.finalShader
         );
 		this.#_postProcessing.scene.add( this.#_postProcessing.quad );
 
+        const P_light = new THREE.PointLight( 0xff6600, 2.0 );
+        P_light.position.set( 0, 4, 0 );
+        const D_light = new THREE.DirectionalLight( 0xff0000, 2.0 );
+        D_light.position.set( 4, 4, 0 );
+        const D_light2 = new THREE.DirectionalLight( 0xff0000, 0.5 );
+        D_light2.position.set( -4, 3, 0 );
+        const A_light = new THREE.AmbientLight( 0xffffff, 1 );
+		// this.#_postProcessing.scene.add( P_light );
+		this.#_postProcessing.scene.add( D_light );
+		this.#_postProcessing.scene.add( D_light2 );
+		// this.#_postProcessing.scene.add( A_light );
+
+        console.log( 'this.#_postProcessing.finalShader:', this.#_postProcessing.finalShader );
+
         this.#_stitchPrograms();
-        this.#_overrideTHREE();
+        this.#_overrideTHREE( ogar );
         
         let onWindowResize = () => {
             this.#_renderer.setSize( window.innerWidth, window.innerHeight );
@@ -148,28 +177,57 @@ class Engine {
     }
 
     // Extends some THREE.JS classes for the purposes of the engine
-    #_overrideTHREE() {
+    #_overrideTHREE( ogar ) {
 
-        class Mesh extends THREE.Mesh {
+        // const engine = self;
+        let self = this;
+
+        class RMesh extends THREE.Mesh {
             constructor( geometry, material ) {
 
                 super( geometry, material );
 
-                self.#_materials.add( material );
-                self.#_geometries.add( geometry );
-                self.#_meshes.add( this );
+                // self.#_materials.add( material );
+                // self.#_geometries.add( geometry );
+                // self.#_meshes.add( this );
+                // console.log( 'hello hello!' );
+                // console.log( self.#_materials );
+
+                // this.destroy = () => {
+                //     self.#_materials.remove( material );
+                //     self.#_geometries.remove( geometry );
+                //     self.#_meshes.remove( this );
+
+                //     geometry.dispose();
+                //     material.dispose();
+                // };
+
+                self.materials.add( material );
+                self.geometries.add( geometry );
+                self.meshes.add( this );
+                console.log( 'new OGAR.Mesh' );
+                console.log( 'Engine materials:', self.materials );
 
                 this.destroy = () => {
-                    self.#_materials.remove( material );
-                    self.#_geometries.remove( geometry );
-                    self.#_meshes.remove( this );
+                    self.materials.remove( material );
+                    self.geometries.remove( geometry );
+                    self.meshes.remove( this );
 
                     geometry.dispose();
                     material.dispose();
                 };
             }
         }
-        // THREE.Mesh = Mesh;
+        console.log( 'overriding THREE' );
+
+        // Object.defineProperties( THREE, {
+        //     Mesh: {
+        //         get: () => RMesh
+        //     }
+        // } );
+
+        // THREE.Mesh = RMesh;
+        ogar.Mesh = RMesh;
     }
 
     #_stitchPrograms() { // TODO
@@ -182,6 +240,7 @@ class Engine {
 		this.#_renderer.render( scene, camera );
 
 		// render post FX
+        this.#_postProcessing.finalShader.uniforms.uCameraPosition.value = camera.position;
 		this.#_renderer.setRenderTarget( null );
 		this.#_renderer.render( this.#_postProcessing.scene, this.#_postProcessing.camera );
     }
@@ -197,5 +256,11 @@ const OGAR = {
     gBufferMaterial
 };
 Object.assign( OGAR, THREE );
+
+// OGAR.Mesh = class {
+//     constructor() {
+//         this.a = 8;
+//     }
+// }
 
 export { OGAR };

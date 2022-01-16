@@ -79,7 +79,9 @@
             const material = new OGAR.gBufferMaterial({
                 ['uCameraNear']: { value: camera.near },
                 ['uCameraFar']: { value: camera.far },
-                ['tDiffuse']: { value: diffuseTexture }
+                ['tDiffuse']: { value: diffuseTexture },
+                ['uSpecularColor']: { value: new OGAR.Color( 0.1, 0.1, 0.1 ) },
+                ['uShininess']: { value: 30 }
             });
 
             const ROWS = 5;

@@ -25,6 +25,6 @@
   },
   "dependencies": {
     "bitecs": "^0.3.6",
-    "three": "^0.129.0"
+    "three": "^0.136.0"
   }
 }

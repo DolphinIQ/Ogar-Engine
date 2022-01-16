@@ -18,7 +18,7 @@ const gBufferVertex = /*glsl*/`#version 300 es
     void main() {
         vNormal = normalize( normal );
         vUv = uv;
-        vPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz; // vec4 * matrix =/= matrix * vec4
+        vPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz; // vec4 * matrix4 =/= matrix4 * vec4
 
         gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
     }
