@@ -17,7 +17,8 @@ export default /* glsl */`
 GeometricContext geometry;
 
 geometry.position = - vViewPosition;
-geometry.normal = normal;
+// transform world-space normal into view-space
+geometry.normal = normalize( (viewMatrix * vec4( normal, 0.0 )).xyz );
 // geometry.viewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );
 geometry.viewDir = normalize( vViewPosition );
 
@@ -88,8 +89,6 @@ IncidentLight directLight;
 	DirectionalLightShadow directionalLightShadow;
 	#endif
 
-	float diff = 0.0;
-
 	#pragma unroll_loop_start
 	for ( int i = 0; i < NUM_DIR_LIGHTS; i ++ ) {
 
@@ -102,17 +101,7 @@ IncidentLight directLight;
 		directLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
 		#endif
 
-		// RE_Direct( directLight, geometry, material, reflectedLight );
-
-        // diff = max( dot( directLight.direction, geometry.normal ), 0.0 );
-        // reflectedLight.directDiffuse += directLight.color * ( diff * material.diffuseColor );
-        // reflectedLight.directDiffuse += vec3( 0.4 );
-        // if ( directLight.color.r > 0.0 ) {
-        //     reflectedLight.directDiffuse += directLight.color;
-        // } else {
-        //     reflectedLight.directDiffuse += vec3( 0.4, 0.0, 0.0 );
-        // }
-        // reflectedLight.directDiffuse += directLight.color;
+		RE_Direct( directLight, geometry, material, reflectedLight );
 
 	}
 	#pragma unroll_loop_end

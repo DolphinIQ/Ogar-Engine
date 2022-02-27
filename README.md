@@ -34,18 +34,23 @@ npm run start
 ```js
 import { OGAR } from './dist/OGAR.module.js';
 
+const engineOptions = {
+    debugger: true
+};
+const rendererOptions = {
+    precision: 'highp',
+    stencil: false
+};
 // Creates a full-screen canvas accessible as engine.canvas
-const engine = new OGAR.Engine();
-engine.init( document.body );
+const engine = new OGAR.Engine( document.body, engineOptions, rendererOptions );
 
 const scene = new OGAR.Scene();
 const camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
 
 const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
-const material = new OGAR.gBufferMaterial({ // The only supported material for now
-    ['uCameraNear']: { value: camera.near }, // Required
-    ['uCameraFar']: { value: camera.far }, // Required
-    ['tDiffuse']: { value: diffuseTexture } // Optional
+const material = new OGAR.GBufferMaterial({ // The only supported material for now
+    shininess: 25,
+    map: diffuseTexture
 });
 const mesh = new OGAR.Mesh( geometry, material );
 scene.add( mesh );
@@ -57,6 +62,7 @@ function animate() { // Inside your animation loop
 ```
 
 ### 🕋 Export and Import binary .ogar files:
+(No practical usage yet)
 ```js
 const ogarExporter = new OGAR.OGARExporter();
 const ogarLoader = new OGAR.OGARLoader();
@@ -70,8 +76,8 @@ ogarExporter.exportMesh( mesh, 'cube' );
 ogarLoader.load('cube.ogar')
     .then( ( asset ) => {
         const loadedModel = new OGAR.Mesh( asset.geometry, someMaterial );
-        engine.scene.add( loadedModel );
+        scene.add( loadedModel );
     });
 ```
 
-###### 2021 FIRST EVER OGAR ENGINE
+###### 2022 FIRST EVER OGAR ENGINE

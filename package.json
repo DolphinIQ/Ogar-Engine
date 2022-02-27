@@ -5,7 +5,8 @@
   "main": "/src/Main.js",
   "scripts": {
     "build": "rollup --config --configDebug \"rollup.config.js\" --watch",
-    "start": "http-server -c-1 examples/"
+    "start": "http-server -c-1 examples/",
+    "edit-three": "node scripts/editThree.js"
   },
   "repository": {
     "type": "git",

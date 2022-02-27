@@ -17,41 +17,127 @@
             box-sizing: border-box;
             overflow: hidden;
         }
+        .info {
+            position: absolute;
+            top: 3%;
+            left: 50%;
+            transform: translateX( -50% );
+            font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+            color: #eee;
+        }
     </style>
 </head>
 <body>
-    
+
+    <div class="info"> Saving and loading of binary .ogar files </div>
+
     <script type="module">
+        // ENGINE
         import { OGAR } from './dist/OGAR.module.js';
 
-        let engine;
+        // CONTROLS
+        import { Orbit } from './utils/orbitControlsOGL.js';
+
+        // UTILITY
+        import Stats from './utils/stats.module.js';
+        import { GUI } from './utils/dat.gui.module.js';
+
+        let engine, scene, camera;
+        let orbitControls, stats, gui;
         let ogarExporter, ogarLoader;
+        let model, material;
 
         init();
         function init() {
 
             console.log( OGAR );
 
-            engine = new OGAR.Engine();
-            engine.init( document.body );
+            const engineOptions = {
+                debugger: true
+            };
+            const rendererOptions = {
+                precision: 'highp',
+                stencil: false
+            };
+            // Creates a full-screen canvas accessible as engine.canvas
+            engine = new OGAR.Engine( document.body, engineOptions, rendererOptions );
 
+            scene = new OGAR.Scene();
+
+            camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
+            camera.position.set( 0, 6, 12 );
+
+            orbitControls = new Orbit( camera, {
+                Vector2: OGAR.Vector2,
+                Vector3: OGAR.Vector3,
+                element: engine.canvas,
+                target: new OGAR.Vector3( 0, 3, 0)
+            });
+
+            // Stats
+            stats = new Stats();
+            document.body.appendChild( stats.dom );
+
+            // GUI
+            gui = new GUI();
+            // gui.add(object, property, [min], [max], [step])
+
+            // Add lights to see the objects
+            const p1 = new OGAR.PointLight( 0xffffff, 1.2 );
+            const p2 = new OGAR.PointLight( 0xffffff, 1.6 );
+            const a1 = new OGAR.AmbientLight( 0xffffff, 0.2 );
+            p1.position.set( 5, 15, 4 );
+            p2.position.set( -10, -2, 10 );
+            scene.add( p1, p2, a1 );
+
+            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
+            material = new OGAR.GBufferMaterial({
+                shininess: 90,
+                color: 0xffffff
+            });
+            const mesh = new OGAR.Mesh( geometry, material );
+            console.log( 'Original model:', mesh );
+            
+            // Init loaders
             ogarExporter = new OGAR.OGARExporter();
             ogarLoader = new OGAR.OGARLoader();
 
-            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
-            const material = new OGAR.MeshNormalMaterial();
-            const mesh = new OGAR.Mesh( geometry, material );
-            console.log( 'Original model:', mesh );
+            const exportMesh = { export: () => {
+                exportModel( model );
+            }};
+            gui.add( exportMesh,'export').name('Export Mesh');
 
-            // Uncomment to save cube mesh into 'cube.ogar' 3d model
-            // ogarExporter.exportMesh( mesh, 'cube' );
+            loadModel();
+            
+            animate();
+        }
 
-            ogarLoader.load('http://localhost:8080/models/cube.ogar')
+        function loadModel() {
+
+            ogarLoader.load('http://localhost:8080/models/goat.ogar')
                 .then( ( asset ) => {
 
-                    const loadedModel = new OGAR.Mesh( asset.geometry, material );
-                    console.log( 'Model with the loaded geometry:', loadedModel );
+                    model = new OGAR.Mesh( asset.geometry, material );
+                    model.rotation.y = -1.2;
+                    console.log( 'Model with the loaded geometry:', model );
+                    scene.add( model );
                 });
+        }
+
+        function exportModel( mesh ) {
+
+            ogarExporter.exportMesh( mesh, 'model' );
+        }
+
+        function animate() {
+            stats.begin();
+
+            orbitControls.update();
+
+            engine.render( scene, camera );
+
+            requestAnimationFrame( animate );
+            stats.end();
         }
 
     </script>

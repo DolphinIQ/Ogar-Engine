@@ -16,7 +16,8 @@ const gBufferVertex = /*glsl*/`#version 300 es
     out vec2 vUv;
 
     void main() {
-        vNormal = normalize( normal );
+        // vNormal = normalize( normal );
+        vNormal = normalize( (modelMatrix * vec4( normal, 0.0 )).xyz ); // world space normal
         vUv = uv;
         vPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz; // vec4 * matrix4 =/= matrix4 * vec4
 

@@ -17,9 +17,19 @@
             box-sizing: border-box;
             overflow: hidden;
         }
+        .info {
+            position: absolute;
+            top: 3%;
+            left: 50%;
+            transform: translateX( -50% );
+            font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+            color: #eee;
+        }
     </style>
 </head>
 <body>
+
+    <div class="info"> G-buffer data (left to right): world position, world normal, depth, diffuse color </div>
 
     <script type="module">
         // ENGINE
@@ -42,15 +52,21 @@
 
         function init() {
 
+            const engineOptions = {
+                debugger: true,
+                debugGbuffer: true // splits the screen into 4 different g-buffer outputs
+            };
+            const rendererOptions = {
+                precision: 'highp',
+                stencil: false
+            };
             // Creates a full-screen canvas accessible as engine.canvas
-            engine = new OGAR.Engine();
-            engine.init( document.body, OGAR );
-            
+            engine = new OGAR.Engine( document.body, engineOptions, rendererOptions );
             console.log( 'engine:', engine );
 
             scene = new OGAR.Scene();
 
-            camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
+            camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 25 );
             camera.position.set( 0, 4, 8 );
 
             orbitControls = new Orbit( camera, {
@@ -75,17 +91,17 @@
 
             const diffuseTexture = textureLoader.load('textures/ogar_hi.png');
 
-            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
-            const material = new OGAR.gBufferMaterial({
-                ['uCameraNear']: { value: camera.near },
-                ['uCameraFar']: { value: camera.far },
-                ['tDiffuse']: { value: diffuseTexture }
+            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 ); // cubes
+            // const geometry = new OGAR.SphereBufferGeometry( 0.6, 32, 16 ); // spheres
+            const material = new OGAR.GBufferMaterial({
+                shininess: 25,
+                map: diffuseTexture
             });
 
             const ROWS = 5;
             const DISTANCE = 2;
             addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
-            const mesh = new OGAR.Mesh( geometry, material );
+            const mesh = new OGAR.Mesh( geometry, material ); // mesh for debug
             console.log( mesh );
 
             window.addEventListener('resize', onWindowResize, false);

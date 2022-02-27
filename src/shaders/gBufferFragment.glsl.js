@@ -8,6 +8,7 @@ const gBufferFragment = /*glsl*/`#version 300 es
     uniform uint uMaterialID;
     uniform vec3 uSpecularColor;
     uniform float uShininess;
+    uniform vec3 uColor;
     // TODO: uniform float uEmission;
 
     in vec3 vPosition;
@@ -32,7 +33,7 @@ const gBufferFragment = /*glsl*/`#version 300 es
         vec2 uv = vUv;
         float depth = 1.0 - getLinearDepth( gl_FragCoord.z, uCameraNear, uCameraFar );
 
-        vec4 color = texture( tDiffuse, uv );
+        vec4 color = texture( tDiffuse, uv ) * vec4( uColor, 1.0 );
 
         // Write position, depth, normal and color data to G-Buffer
         uint range8bit = uint(255);

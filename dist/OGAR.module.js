@@ -12769,7 +12769,7 @@ var lights_toon_pars_fragment = "varying vec3 vViewPosition;\nstruct ToonMateria
 
 var lights_phong_fragment = "BlinnPhongMaterial material;\nmaterial.diffuseColor = diffuseColor.rgb;\nmaterial.specularColor = specular;\nmaterial.specularShininess = shininess;\nmaterial.specularStrength = specularStrength;";
 
-var lights_phong_pars_fragment = "varying vec3 vViewPosition;\nstruct BlinnPhongMaterial {\n\tvec3 diffuseColor;\n\tvec3 specularColor;\n\tfloat specularShininess;\n\tfloat specularStrength;\n};\nvoid RE_Direct_BlinnPhong( const in IncidentLight directLight, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {\n\tfloat dotNL = saturate( dot( geometry.normal, directLight.direction ) );\n\tvec3 irradiance = dotNL * directLight.color;\n\treflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );\n\treflectedLight.directSpecular += irradiance * BRDF_BlinnPhong( directLight.direction, geometry.viewDir, geometry.normal, material.specularColor, material.specularShininess ) * material.specularStrength;\n}\nvoid RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {\n\treflectedLight.indirectDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );\n}\n#define RE_Direct\t\t\t\tRE_Direct_BlinnPhong\n#define RE_IndirectDiffuse\t\tRE_IndirectDiffuse_BlinnPhong\n#define Material_LightProbeLOD( material )\t(0)";
+var lights_phong_pars_fragment$1 = "varying vec3 vViewPosition;\nstruct BlinnPhongMaterial {\n\tvec3 diffuseColor;\n\tvec3 specularColor;\n\tfloat specularShininess;\n\tfloat specularStrength;\n};\nvoid RE_Direct_BlinnPhong( const in IncidentLight directLight, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {\n\tfloat dotNL = saturate( dot( geometry.normal, directLight.direction ) );\n\tvec3 irradiance = dotNL * directLight.color;\n\treflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );\n\treflectedLight.directSpecular += irradiance * BRDF_BlinnPhong( directLight.direction, geometry.viewDir, geometry.normal, material.specularColor, material.specularShininess ) * material.specularStrength;\n}\nvoid RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {\n\treflectedLight.indirectDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );\n}\n#define RE_Direct\t\t\t\tRE_Direct_BlinnPhong\n#define RE_IndirectDiffuse\t\tRE_IndirectDiffuse_BlinnPhong\n#define Material_LightProbeLOD( material )\t(0)";
 
 var lights_physical_fragment = "PhysicalMaterial material;\nmaterial.diffuseColor = diffuseColor.rgb * ( 1.0 - metalnessFactor );\nvec3 dxy = max( abs( dFdx( geometryNormal ) ), abs( dFdy( geometryNormal ) ) );\nfloat geometryRoughness = max( max( dxy.x, dxy.y ), dxy.z );\nmaterial.roughness = max( roughnessFactor, 0.0525 );material.roughness += geometryRoughness;\nmaterial.roughness = min( material.roughness, 1.0 );\n#ifdef IOR\n\t#ifdef SPECULAR\n\t\tfloat specularIntensityFactor = specularIntensity;\n\t\tvec3 specularColorFactor = specularColor;\n\t\t#ifdef USE_SPECULARINTENSITYMAP\n\t\t\tspecularIntensityFactor *= texture2D( specularIntensityMap, vUv ).a;\n\t\t#endif\n\t\t#ifdef USE_SPECULARCOLORMAP\n\t\t\tspecularColorFactor *= specularColorMapTexelToLinear( texture2D( specularColorMap, vUv ) ).rgb;\n\t\t#endif\n\t\tmaterial.specularF90 = mix( specularIntensityFactor, 1.0, metalnessFactor );\n\t#else\n\t\tfloat specularIntensityFactor = 1.0;\n\t\tvec3 specularColorFactor = vec3( 1.0 );\n\t\tmaterial.specularF90 = 1.0;\n\t#endif\n\tmaterial.specularColor = mix( min( pow2( ( ior - 1.0 ) / ( ior + 1.0 ) ) * specularColorFactor, vec3( 1.0 ) ) * specularIntensityFactor, diffuseColor.rgb, metalnessFactor );\n#else\n\tmaterial.specularColor = mix( vec3( 0.04 ), diffuseColor.rgb, metalnessFactor );\n\tmaterial.specularF90 = 1.0;\n#endif\n#ifdef USE_CLEARCOAT\n\tmaterial.clearcoat = clearcoat;\n\tmaterial.clearcoatRoughness = clearcoatRoughness;\n\tmaterial.clearcoatF0 = vec3( 0.04 );\n\tmaterial.clearcoatF90 = 1.0;\n\t#ifdef USE_CLEARCOATMAP\n\t\tmaterial.clearcoat *= texture2D( clearcoatMap, vUv ).x;\n\t#endif\n\t#ifdef USE_CLEARCOAT_ROUGHNESSMAP\n\t\tmaterial.clearcoatRoughness *= texture2D( clearcoatRoughnessMap, vUv ).y;\n\t#endif\n\tmaterial.clearcoat = saturate( material.clearcoat );\tmaterial.clearcoatRoughness = max( material.clearcoatRoughness, 0.0525 );\n\tmaterial.clearcoatRoughness += geometryRoughness;\n\tmaterial.clearcoatRoughness = min( material.clearcoatRoughness, 1.0 );\n#endif\n#ifdef USE_SHEEN\n\tmaterial.sheenColor = sheenColor;\n\t#ifdef USE_SHEENCOLORMAP\n\t\tmaterial.sheenColor *= sheenColorMapTexelToLinear( texture2D( sheenColorMap, vUv ) ).rgb;\n\t#endif\n\tmaterial.sheenRoughness = clamp( sheenRoughness, 0.07, 1.0 );\n\t#ifdef USE_SHEENROUGHNESSMAP\n\t\tmaterial.sheenRoughness *= texture2D( sheenRoughnessMap, vUv ).a;\n\t#endif\n#endif";
 
@@ -12993,7 +12993,7 @@ const ShaderChunk = {
 	lights_toon_fragment: lights_toon_fragment,
 	lights_toon_pars_fragment: lights_toon_pars_fragment,
 	lights_phong_fragment: lights_phong_fragment,
-	lights_phong_pars_fragment: lights_phong_pars_fragment,
+	lights_phong_pars_fragment: lights_phong_pars_fragment$1,
 	lights_physical_fragment: lights_physical_fragment,
 	lights_physical_pars_fragment: lights_physical_pars_fragment,
 	lights_fragment_begin: lights_fragment_begin$1,
@@ -20183,7 +20183,8 @@ function WebGLLights( extensions, capabilities ) {
 				uniforms.direction.setFromMatrixPosition( light.matrixWorld );
 				vector3.setFromMatrixPosition( light.target.matrixWorld );
 				uniforms.direction.sub( vector3 );
-				uniforms.direction.transformDirection( viewMatrix );
+				// uniforms.direction.normalize(); 
+				uniforms.direction.transformDirection( viewMatrix ); 
 
 				directionalLength ++;
 
@@ -50765,88 +50766,6 @@ var THREE = /*#__PURE__*/Object.freeze({
 	sRGBEncoding: sRGBEncoding
 });
 
-/*********************************/
-/********** INTERPOLATION ********/
-/*********************************/
-
-// Spline Interpolation
-// Specification: https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#appendix-c-spline-interpolation
-class GLTFCubicSplineInterpolant extends Interpolant {
-
-	constructor( parameterPositions, sampleValues, sampleSize, resultBuffer ) {
-
-		super( parameterPositions, sampleValues, sampleSize, resultBuffer );
-
-	}
-
-	copySampleValue_( index ) {
-
-		// Copies a sample value to the result buffer. See description of glTF
-		// CUBICSPLINE values layout in interpolate_() function below.
-
-		const result = this.resultBuffer,
-			values = this.sampleValues,
-			valueSize = this.valueSize,
-			offset = index * valueSize * 3 + valueSize;
-
-		for ( let i = 0; i !== valueSize; i ++ ) {
-
-			result[ i ] = values[ offset + i ];
-
-		}
-
-		return result;
-
-	}
-
-}
-
-GLTFCubicSplineInterpolant.prototype.beforeStart_ = GLTFCubicSplineInterpolant.prototype.copySampleValue_;
-
-GLTFCubicSplineInterpolant.prototype.afterEnd_ = GLTFCubicSplineInterpolant.prototype.copySampleValue_;
-
-GLTFCubicSplineInterpolant.prototype.interpolate_ = function ( i1, t0, t, t1 ) {
-
-	const result = this.resultBuffer;
-	const values = this.sampleValues;
-	const stride = this.valueSize;
-
-	const stride2 = stride * 2;
-	const stride3 = stride * 3;
-
-	const td = t1 - t0;
-
-	const p = ( t - t0 ) / td;
-	const pp = p * p;
-	const ppp = pp * p;
-
-	const offset1 = i1 * stride3;
-	const offset0 = offset1 - stride3;
-
-	const s2 = - 2 * ppp + 3 * pp;
-	const s3 = ppp - pp;
-	const s0 = 1 - s2;
-	const s1 = s3 - pp + p;
-
-	// Layout of keyframe output values for CUBICSPLINE animations:
-	//   [ inTangent_1, splineVertex_1, outTangent_1, inTangent_2, splineVertex_2, ... ]
-	for ( let i = 0; i !== stride; i ++ ) {
-
-		const p0 = values[ offset0 + i + stride ]; // splineVertex_k
-		const m0 = values[ offset0 + i + stride2 ] * td; // outTangent_k * (t_k+1 - t_k)
-		const p1 = values[ offset1 + i + stride ]; // splineVertex_k+1
-		const m1 = values[ offset1 + i ] * td; // inTangent_k+1 * (t_k+1 - t_k)
-
-		result[ i ] = s0 * p0 + s1 * m0 + s2 * p1 + s3 * m1;
-
-	}
-
-	return result;
-
-};
-
-new Quaternion();
-
 class OGARExporter {
     constructor() {
         this.downloadEl = document.createElement( 'a' );
@@ -50982,20 +50901,17 @@ const basicVertex = /*glsl*/`#version 300 es
     precision highp float;
 
     in vec3 position;
-    in vec3 normal;
     in vec2 uv;
 
     uniform mat4 modelViewMatrix;
     uniform mat4 projectionMatrix;
     uniform mat3 normalMatrix;
 
-    out vec3 vNormal;
     out vec2 vUv;
 
     void main() {
         vUv = uv;
-        vNormal = normal;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+        gl_Position = vec4( position, 1.0 );
     }
 `;
 
@@ -51018,7 +50934,8 @@ var lights_fragment_begin = /* glsl */`
 GeometricContext geometry;
 
 geometry.position = - vViewPosition;
-geometry.normal = normal;
+// transform world-space normal into view-space
+geometry.normal = normalize( (viewMatrix * vec4( normal, 0.0 )).xyz );
 // geometry.viewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );
 geometry.viewDir = normalize( vViewPosition );
 
@@ -51089,8 +51006,6 @@ IncidentLight directLight;
 	DirectionalLightShadow directionalLightShadow;
 	#endif
 
-	float diff = 0.0;
-
 	#pragma unroll_loop_start
 	for ( int i = 0; i < NUM_DIR_LIGHTS; i ++ ) {
 
@@ -51103,17 +51018,7 @@ IncidentLight directLight;
 		directLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
 		#endif
 
-		// RE_Direct( directLight, geometry, material, reflectedLight );
-
-        // diff = max( dot( directLight.direction, geometry.normal ), 0.0 );
-        // reflectedLight.directDiffuse += directLight.color * ( diff * material.diffuseColor );
-        // reflectedLight.directDiffuse += vec3( 0.4 );
-        // if ( directLight.color.r > 0.0 ) {
-        //     reflectedLight.directDiffuse += directLight.color;
-        // } else {
-        //     reflectedLight.directDiffuse += vec3( 0.4, 0.0, 0.0 );
-        // }
-        // reflectedLight.directDiffuse += directLight.color;
+		RE_Direct( directLight, geometry, material, reflectedLight );
 
 	}
 	#pragma unroll_loop_end
@@ -51165,22 +51070,63 @@ IncidentLight directLight;
 #endif
 `;
 
+var lights_phong_pars_fragment = /* glsl */`
+// varying vec3 vViewPosition;
+
+struct BlinnPhongMaterial {
+	vec3 diffuseColor;
+	vec3 specularColor;
+	float specularShininess;
+	float specularStrength;
+};
+
+void RE_Direct_BlinnPhong( const in IncidentLight directLight, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {
+	float dotNL = saturate( dot( geometry.normal, directLight.direction ) );
+	vec3 irradiance = dotNL * directLight.color;
+	reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
+	reflectedLight.directSpecular += irradiance * BRDF_BlinnPhong( directLight.direction, geometry.viewDir, geometry.normal, material.specularColor, material.specularShininess ) * material.specularStrength;
+}
+
+void RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {
+	reflectedLight.indirectDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
+}
+
+#define RE_Direct				RE_Direct_BlinnPhong
+#define RE_IndirectDiffuse		RE_IndirectDiffuse_BlinnPhong
+#define Material_LightProbeLOD( material )	(0)
+`;
+
+var debug_fragment_output = /*glsl*/`
+
+if( uv.x < 0.5 ) { // left side
+    if( uv.y > 0.5 ) { // top
+        finalColor = vec4( position, 1.0 );
+    } else { // bottom
+        finalColor = vec4( vec3( depth ), 1.0 );
+        // finalColor = vec4( outgoingLight, 1.0 );
+        
+        // finalColor = vec4( directionalLights[ 0 ].color, 1.0 );
+        // finalColor = vec4( directionalLights[ 0 ].direction, 1.0 );
+
+        // if ( directionalLights[ 0 ].color.r == 0.0 ) finalColor.r = 1.0;
+        // if ( directionalLights[ 0 ].color.g == 0.0 ) finalColor.g = 1.0;
+        // if ( directionalLights[ 0 ].color.b == 0.0 ) finalColor.b = 1.0;
+        // if ( directionalLights[ 0 ].direction.r == 0.0 ) finalColor.r = 1.0;
+        // if ( directionalLights[ 0 ].direction.g == 0.0 ) finalColor.g = 1.0;
+        // if ( directionalLights[ 0 ].direction.b == 0.0 ) finalColor.b = 1.0;
+    }
+} else { // right side
+    if( uv.y > 0.5 ) { // top
+        finalColor = vec4( normal, 1.0 );
+    } else { // bottom
+        finalColor = vec4( diffuseColor, 1.0 );
+    }
+}
+`;
+
 const finalRenderFragment = /*glsl*/`#version 300 es
     precision highp float;
     #define PHONG
-
-    // struct PointLight {
-    //     vec3 color;
-    //     vec3 position;
-    //     float intensity;
-    //     float radius;
-    // };
-
-    // struct DirectionalLight {
-    //     vec3 color;
-    //     vec3 position;
-    //     float intensity;
-    // };
 
     struct Material {
         bool unlit;
@@ -51192,142 +51138,52 @@ const finalRenderFragment = /*glsl*/`#version 300 es
     in vec2 vUv;
     
     // Built-in three.js uniforms
-    uniform mat4 modelMatrix; // = object.matrixWorld
-    uniform mat4 modelViewMatrix; // = camera.matrixWorldInverse * object.matrixWorld
-    uniform mat4 projectionMatrix; // = camera.projectionMatrix
+    // uniform mat4 modelMatrix; // = object.matrixWorld
+    // uniform mat4 modelViewMatrix; // = camera.matrixWorldInverse * object.matrixWorld
+    // uniform mat4 projectionMatrix; // = camera.projectionMatrix
     uniform mat4 viewMatrix; // = camera.matrixWorldInverse
-    uniform mat3 normalMatrix; // = inverse transpose of modelViewMatrix
-    // uniform vec3 cameraPosition; // = camera position in world space (orthographic for deferred shaded quad)
+    // uniform mat3 normalMatrix; // = inverse transpose of modelViewMatrix
+    uniform vec3 cameraPosition; // = camera position in world space (orthographic for deferred shaded quad)
 
     uniform sampler2D tPosition;
     uniform sampler2D tNormal;
     uniform sampler2D tDiffuse;
     uniform sampler2D tSpecular;
-    uniform vec3 uCameraPosition;
     uniform Material materials[ 256 ];
 
-    out vec4 finalColor;
+    layout(location = 0) out vec4 finalColor; 
 
     #include <common>
     #include <packing>
 
-// #include <dithering_pars_fragment>
-// #include <color_pars_fragment>
-// #include <uv_pars_fragment>
-// #include <uv2_pars_fragment>
-// #include <map_pars_fragment>
-// #include <alphamap_pars_fragment>
-// #include <alphatest_pars_fragment>
-// #include <aomap_pars_fragment>
-// #include <lightmap_pars_fragment>
-// #include <emissivemap_pars_fragment>
-// #include <envmap_common_pars_fragment>
-// #include <envmap_pars_fragment>
-// #include <cube_uv_reflection_fragment>
-// #include <fog_pars_fragment>
+    // #include <dithering_pars_fragment>
+    // #include <color_pars_fragment>
+    // #include <uv_pars_fragment>
+    // #include <uv2_pars_fragment>
+    // #include <map_pars_fragment>
+    // #include <alphamap_pars_fragment>
+    // #include <alphatest_pars_fragment>
+    // #include <aomap_pars_fragment>
+    // #include <lightmap_pars_fragment>
+    // #include <emissivemap_pars_fragment>
+    // #include <envmap_common_pars_fragment>
+    // #include <envmap_pars_fragment>
+    // #include <cube_uv_reflection_fragment>
+    // #include <fog_pars_fragment>
 
     #include <bsdfs>
-    // #include <lights_pars_begin>
-    uniform bool receiveShadow;
-    uniform vec3 ambientLightColor;
-    uniform vec3 lightProbe[ 9 ];
+    #include <lights_pars_begin>
 
-    // get the irradiance (radiance convolved with cosine lobe) at the point 'normal' on the unit sphere
-    // source: https://graphics.stanford.edu/papers/envmap/envmap.pdf
-    vec3 shGetIrradianceAt( in vec3 normal, in vec3 shCoefficients[ 9 ] ) {
-
-        // normal is assumed to have unit length
-
-        float x = normal.x, y = normal.y, z = normal.z;
-
-        // band 0
-        vec3 result = shCoefficients[ 0 ] * 0.886227;
-
-        // band 1
-        result += shCoefficients[ 1 ] * 2.0 * 0.511664 * y;
-        result += shCoefficients[ 2 ] * 2.0 * 0.511664 * z;
-        result += shCoefficients[ 3 ] * 2.0 * 0.511664 * x;
-
-        // band 2
-        result += shCoefficients[ 4 ] * 2.0 * 0.429043 * x * y;
-        result += shCoefficients[ 5 ] * 2.0 * 0.429043 * y * z;
-        result += shCoefficients[ 6 ] * ( 0.743125 * z * z - 0.247708 );
-        result += shCoefficients[ 7 ] * 2.0 * 0.429043 * x * z;
-        result += shCoefficients[ 8 ] * 0.429043 * ( x * x - y * y );
-
-        return result;
-
-    }
-
-    vec3 getLightProbeIrradiance( const in vec3 lightProbe[ 9 ], const in vec3 normal ) {
-
-        vec3 worldNormal = inverseTransformDirection( normal, viewMatrix );
-
-        vec3 irradiance = shGetIrradianceAt( worldNormal, lightProbe );
-
-        return irradiance;
-
-    }
-
-    vec3 getAmbientLightIrradiance( const in vec3 ambientLightColor ) {
-
-        vec3 irradiance = ambientLightColor;
-    
-        return irradiance;
-    
-    }
-
-    #if NUM_DIR_LIGHTS > 0
-
-        struct DirectionalLight {
-            vec3 direction;
-            vec3 color;
-        };
-
-        uniform DirectionalLight directionalLights[ NUM_DIR_LIGHTS ];
-
-        void getDirectionalLightInfo( const in DirectionalLight directionalLight, const in GeometricContext geometry, out IncidentLight light ) {
-
-            light.color = directionalLight.color;
-            light.direction = directionalLight.direction;
-            light.visible = true;
-
-        }
-
-        // finalColor = vec4( directionalLights[ 0 ].color, 1.0 );
-
-    #endif
     // #include <normal_pars_fragment>
 
-    // edited: #include <lights_phong_pars_fragment>
-    // vec4 mvPosition = 
-    // varying vec3 vViewPosition;
-    struct BlinnPhongMaterial {
-        vec3 diffuseColor;
-        vec3 specularColor;
-        float specularShininess;
-        float specularStrength;
-    };
-    void RE_Direct_BlinnPhong( const in IncidentLight directLight, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {
-        float dotNL = saturate( dot( geometry.normal, directLight.direction ) );
-        vec3 irradiance = dotNL * directLight.color;
-        reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
-        reflectedLight.directSpecular += irradiance * BRDF_BlinnPhong( directLight.direction, geometry.viewDir, geometry.normal, material.specularColor, material.specularShininess ) * material.specularStrength;
-    }
-    void RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in GeometricContext geometry, const in BlinnPhongMaterial material, inout ReflectedLight reflectedLight ) {
-        reflectedLight.indirectDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
-    }
-    #define RE_Direct				RE_Direct_BlinnPhong
-    #define RE_IndirectDiffuse		RE_IndirectDiffuse_BlinnPhong
-    #define Material_LightProbeLOD( material )	(0)
-    // end edited: #include <lights_phong_pars_fragment>
-    
-// #include <shadowmap_pars_fragment>
-// #include <bumpmap_pars_fragment>
-// #include <normalmap_pars_fragment>
-// #include <specularmap_pars_fragment>
-// #include <logdepthbuf_pars_fragment>
-// #include <clipping_planes_pars_fragment>
+    ${ lights_phong_pars_fragment }
+
+    // #include <shadowmap_pars_fragment>
+    // #include <bumpmap_pars_fragment>
+    // #include <normalmap_pars_fragment>
+    // #include <specularmap_pars_fragment>
+    // #include <logdepthbuf_pars_fragment>
+    // #include <clipping_planes_pars_fragment>
 
     void main() {
 
@@ -51341,8 +51197,8 @@ const finalRenderFragment = /*glsl*/`#version 300 es
         vec3 specular = texture( tSpecular, uv ).rgb;
         float shininess = texture( tSpecular, uv ).a;
 
-        vec3 vViewPosition = uCameraPosition - position;
-        // reflect()
+        vec4 mvPosition = viewMatrix * vec4( position, 1.0 );
+        vec3 vViewPosition = - mvPosition.xyz;
 
 	    ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
         // TODO: vec3 totalEmissiveRadiance = emissive;
@@ -51355,41 +51211,27 @@ const finalRenderFragment = /*glsl*/`#version 300 es
         material.specularShininess = shininess;
         material.specularStrength = 1.0;
         // end edited: #include <lights_phong_fragment>
-        // #include <lights_fragment_begin>
         ${ lights_fragment_begin }
         // #include <lights_fragment_maps>
         #include <lights_fragment_end>
 
-        // vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + 
-        //     reflectedLight.directSpecular + reflectedLight.indirectSpecular;
-        vec3 outgoingLight = reflectedLight.directDiffuse;
+        vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + 
+            reflectedLight.directSpecular + reflectedLight.indirectSpecular;
 
-        // finalColor = vec4( position, 1.0 );
-
-        if( uv.x < 0.5 ) { // left side
-            if( uv.y > 0.5 ) { // top
-                finalColor = vec4( position, 1.0 );
-            } else { // bottom
-                // finalColor = vec4( vec3( depth ), 1.0 );
-                // finalColor = vec4( outgoingLight, 1.0 );
-                
-                // finalColor = vec4( directionalLights[ 0 ].color, 1.0 );
-                // finalColor = vec4( vec3(0.6), 1.0 );
-                finalColor = vec4( directionalLights[ 0 ].color, 1.0 );
-
-                // if ( directionalLights[ 0 ].color.r == 0.0 )finalColor.r = 1.0;
-                // if ( directionalLights[ 0 ].color.g == 0.0 )finalColor.g = 1.0;
-                // if ( directionalLights[ 0 ].color.b == 0.0 )finalColor.b = 1.0;
-            }
-        } else { // right side
-            if( uv.y > 0.5 ) { // top
-                finalColor = vec4( normal, 1.0 );
-            } else { // bottom
-                finalColor = vec4( diffuseColor, 1.0 );
-            }
-        }
+        finalColor = vec4( outgoingLight, 1.0 );
     }
 `;
+
+class EmptyTexture extends CanvasTexture {
+    constructor() {
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect( 0, 0, 1, 1 );
+        super( canvas );
+    }
+}
 
 const gBufferVertex = /*glsl*/`#version 300 es
     precision highp float;
@@ -51408,7 +51250,8 @@ const gBufferVertex = /*glsl*/`#version 300 es
     out vec2 vUv;
 
     void main() {
-        vNormal = normalize( normal );
+        // vNormal = normalize( normal );
+        vNormal = normalize( (modelMatrix * vec4( normal, 0.0 )).xyz ); // world space normal
         vUv = uv;
         vPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz; // vec4 * matrix4 =/= matrix4 * vec4
 
@@ -51425,6 +51268,7 @@ const gBufferFragment = /*glsl*/`#version 300 es
     uniform uint uMaterialID;
     uniform vec3 uSpecularColor;
     uniform float uShininess;
+    uniform vec3 uColor;
     // TODO: uniform float uEmission;
 
     in vec3 vPosition;
@@ -51449,7 +51293,7 @@ const gBufferFragment = /*glsl*/`#version 300 es
         vec2 uv = vUv;
         float depth = 1.0 - getLinearDepth( gl_FragCoord.z, uCameraNear, uCameraFar );
 
-        vec4 color = texture( tDiffuse, uv );
+        vec4 color = texture( tDiffuse, uv ) * vec4( uColor, 1.0 );
 
         // Write position, depth, normal and color data to G-Buffer
         uint range8bit = uint(255);
@@ -51461,27 +51305,127 @@ const gBufferFragment = /*glsl*/`#version 300 es
     }
 `;
 
-class gBufferMaterial extends RawShaderMaterial {
+class GBufferMaterial extends RawShaderMaterial {
 /**
- * Basic gBufferMaterial
+ * Basic G-Buffer Material
  * @param {Object} uniforms - uniforms for the shader
  * 
- * REQUIRED:
- * - uCameraNear - camera.near
- * - uCameraFar - camera.far
- * 
  * Currently supported:
- * - tDiffuse - diffuse map
+ * - map - diffuse map
+ * - color - color
+ * - specular - specular color
+ * - shininess - shininess value
  */
-    constructor( uniforms ) {
+    #_camera
+    #_map
+    #_color
+    #_specular
+    #_shininess
 
-        uniforms['uMaterialID'] = { value: 0 }; // 0-255
+    constructor( options ) {
 
         super({
-            uniforms,
             vertexShader: gBufferVertex.trim(),
             fragmentShader: gBufferFragment.trim()
         });
+
+        // Default values fill
+        this.#_map = options.map || new EmptyTexture();
+        if ( options.color ) {
+            this.#_color = options.color.isColor ? options.color : new Color( options.color ); // check for hex
+        } else {
+            this.#_color = new Color( 1, 1, 1 );
+        }
+        // this.#_color = options.color || new Color( 1, 1, 1 );
+        this.#_specular = options.specular || new Color( 0.1, 0.1, 0.1 );
+        this.#_shininess = options.shininess || 30;
+        this.#_camera = options.camera || { near: 0.1, far: 100 };
+        
+        // this.map = options.map || new EmptyTexture();
+        // this.color = options.color || new Color( 1, 1, 1 );
+        // this.specular = options.specular || new Color( 0.1, 0.1, 0.1 );
+        // this.shininess = options.shininess || 30;
+        // this.camera = options.camera;
+
+        // const uniforms = {};
+        this.uniforms['uMaterialID'] = { value: 0 }; // 0-255
+        this.uniforms['tDiffuse'] = { value: this.#_map };
+        this.uniforms['uColor'] = { value: this.#_color };
+        this.uniforms['uSpecularColor'] = { value: this.#_specular };
+        this.uniforms['uShininess'] = { value: this.#_shininess };
+        this.uniforms['uCameraNear'] = { value: this.#_camera.near };
+        this.uniforms['uCameraFar'] = { value: this.#_camera.far };
+
+        // this.uniforms['uMaterialID'] = { value: 0 }; // 0-255
+        // this.uniforms['tDiffuse'] = { value: this.map };
+        // this.uniforms['uColor'] = { value: this.color };
+        // this.uniforms['uSpecularColor'] = { value: this.specular };
+        // this.uniforms['uShininess'] = { value: this.shininess };
+        // this.uniforms['uCameraNear'] = { value: this.camera.near };
+        // this.uniforms['uCameraFar'] = { value: this.camera.far };
+
+        // super({
+        //     uniforms,
+        //     vertexShader: gBufferVertex.trim(),
+        //     fragmentShader: gBufferFragment.trim()
+        // });
+    }
+
+    get camera() {
+        return this.#_camera;
+    }
+    set camera( value ) {
+        this.#_camera = value;
+        this.uniforms['uCameraNear'].value = this.#_camera.near;
+        this.uniforms['uCameraFar'].value = this.#_camera.far;
+    }
+
+    get map() {
+        return this.#_map;
+    }
+    set map( value ) {
+        this.#_map = value;
+        this.uniforms['tDiffuse'].value = value;
+    }
+
+    get color() {
+        return this.#_color;
+    }
+    set color( value ) {
+        this.#_color = value;
+        this.uniforms['uColor'].value = value;
+    }
+
+    get specular() {
+        return this.#_specular;
+    }
+    set specular( value ) {
+        this.#_specular = value;
+        this.uniforms['uSpecularColor'].value = value;
+    }
+
+    get shininess() {
+        return this.#_shininess;
+    }
+    set shininess( value ) {
+        this.#_shininess = value;
+        this.uniforms['uShininess'].value = value;
+    }
+}
+
+/**
+ * Geometry for a full-screen triangle. Compared to using a quad, this approach harmonizes with modern 
+ * GPU rasterization patterns and eliminates unnecessary fragment calculations along the screen diagonal. 
+ * This is especially beneficial for GPGPU passes and effects that use complex fragment shaders.
+ */
+class FullScreenTriangleGeometry extends BufferGeometry {
+    constructor() {
+        super();
+
+        const vertices = new Float32Array([ -1, -1, -1, 3, -1, -1, -1, 3, -1 ]);
+        const uvs = new Float32Array([ 0, 0, 2, 0, 0, 2 ]);
+        this.setAttribute( 'position', new BufferAttribute( vertices, 3 ) );
+        this.setAttribute( 'uv', new BufferAttribute( uvs, 2 ) );
     }
 }
 
@@ -51575,21 +51519,107 @@ class WEBGL {
 
 }
 
+class Debugger {
+    /**
+     * Debugger to display info real time
+     * @param { Number } updateRate - how many times per second should the values be refreshed
+     * @param { String } topOffset - element.style.top
+     */
+    constructor( updateRate = 5, topOffset = '48px' ) {
+
+        this.lines = [];
+        this.element = document.createElement('div');
+        this.element.style.position = 'absolute';
+        this.element.style.top = topOffset;
+        this.element.style.left = '0';
+        this.element.style.width = '170px';
+        this.element.style.height = '200px';
+        this.element.style.backgroundColor = 'rgba( 0.2, 0.2, 0.2, 0.8 )';
+        this.element.style.border = '1px solid #ddd';
+        this.element.style.pointerEvents = 'none';
+        this.element.style.padding = '5px';
+        this.element.style.fontFamily = 'Courier New, Courier, monospace';
+        this.element.style.wordBreak = 'break-all'; 
+        // this.element.style.overflowY = 'auto';
+
+        document.body.appendChild( this.element );
+
+        setInterval( () => {
+            this.update();
+        }, 1000/updateRate );
+    }
+
+    /**
+     * Adds new debugger line
+     * @param { Object } object - object to get data from
+     * @param { String } property - property to display. If typeof 'object', it gets JSON.stringify
+     * @param { String } preface - string to display before data
+     * @param { Boolean } autoUpdate - whether data should be autorefreshed. Default true. 
+     * Disable if you manually update the value
+     */
+    addLine( object, property, preface, autoUpdate = true ) {
+
+        const newLine = { object, property, preface, autoUpdate };
+        newLine.element = document.createElement('div');
+        newLine.element.style.marginBottom = '1px';
+        newLine.element.style.fontSize = '13px';
+        newLine.element.style.color = '#ddd';
+        newLine.update = () => {
+            const value = typeof newLine.object[ newLine.property ] === 'object' ? 
+                JSON.stringify( newLine.object[ newLine.property ] ) : newLine.object[ newLine.property ];
+            newLine.element.textContent = `${ newLine.preface }: ${ value }`;
+        };
+        newLine.update();
+        this.lines.push( newLine );
+        this.element.appendChild( newLine.element );
+    }
+
+    /**
+     * Gets a particular line of the debugger, searched by 'preface' value. Useful if you want to
+     * update the line yourself.
+     * @param { String } preface - name to search by
+     */
+    getLine( preface ) {
+        for ( let i = 0, len = this.lines.length; i < len; i++ ) {
+            const line = this.lines[i];
+            if ( line.preface === preface ) {
+                return line;
+            }
+        }
+    }
+
+    update() {
+
+        for ( let i = 0, len = this.lines.length; i < len; i++ ) {
+            const line = this.lines[i];
+            if ( !line.autoUpdate ) continue;
+
+            line.update();
+        }
+    }
+}
+
 // THREE
+
 
 class Engine {
 
     #_renderer;
     #_MRT;
-    #_postProcessing;
+    #_deferredShading;
 
-    // #_materials;
-    // #_geometries;
-    // #_textures;
-    // #_meshes;
-    // #_lights;
+    #_gBufferMaterials
+    #_settings
+    #_visibleObjects
 
-    constructor() {
+    /**
+     * 
+     * @param { DOM } element - element to append webgl canvas
+     * @param { Object } engineOptions - options of the engine:
+     * - debugger - whether to use the debugger
+     * @param { Object } rendererOptions - options for the THREE.WebGLRenderer
+     */
+     constructor( element, engineOptions, rendererOptions ) {
 
         // Detect WebGL support
         if ( !WEBGL.isWebGL2Available() ) {
@@ -51598,28 +51628,38 @@ class Engine {
             document.body.appendChild( warning );
             return;
         }
-    }
-
-    /**
-     * 
-     * @param {DOM} element - element to append webgl canvas
-     */
-    init( element, ogar ) {
 
         console.log('OGAR initialized!');
 
-        this.materials = new Set();
-        this.geometries = new Set();
-        this.textures = new Set();
-        this.meshes = new Set();
-        this.lights = new Set();
+        this.#_settings = {
+            debugger: engineOptions.debugger,
+            debugGbuffer: engineOptions.debugGbuffer,
+            shadows: {
+                enabled: false,
+            }
+        };
 
-        this.#_renderer = new WebGLRenderer({ precision: 'highp' });
+        this.deferredShadingLayer = 31; // layer to swap objects to, during rendering
+        // this.materials = {};
+        this.#_visibleObjects = [];
+
+        const rendererParameters = rendererOptions || { precision: 'highp' };
+        this.#_renderer = new WebGLRenderer( rendererParameters );
         this.#_renderer.setSize( window.innerWidth, window.innerHeight );
+        this.#_renderer.setPixelRatio( window.devicePixelRatio );
+
         this.canvas = this.#_renderer.domElement;
         element.appendChild( this.canvas );
+        if ( this.#_settings.shadows.enabled ) {
+
+            this.#_renderer.shadowMap.enabled = true;
+            this.#_renderer.shadowMap.type = PCFSoftShadowMap;
+            // this.#_renderer.shadowMap.autoUpdate = false;
+        }
         this.#_renderer.outputEncoding = sRGBEncoding;
         this.#_renderer.physicallyCorrectLights = true;
+
+        console.log( 'Renderer:', this.#_renderer ); 
 
         // Create a multi render target with Float buffers
 		this.#_MRT = new WebGLMultipleRenderTargets(
@@ -51641,20 +51681,30 @@ class Engine {
 		this.#_MRT.texture[ 2 ].name = 'diffuse';
 		this.#_MRT.texture[ 3 ].name = 'specular';
 
-        // PostProcessing quad setup
-        this.#_postProcessing = {};
-		this.#_postProcessing.scene = new Scene();
-		this.#_postProcessing.camera = new OrthographicCamera( -1, 1, 1, -1, 0, 1 );
+        // PostProcessing full-screen triangle setup
+        this.#_deferredShading = {};
+		this.#_deferredShading.scene = new Scene();
+		this.#_deferredShading.camera = new OrthographicCamera( -1, 1, 1, -1, 0, 1 );
 
-		this.#_postProcessing.finalShader = new RawShaderMaterial({
+        let fragmentShader = finalRenderFragment;
+        if ( this.#_settings.debugGbuffer ) {
+            fragmentShader = fragmentShader.replace( 
+                `finalColor = vec4( outgoingLight, 1.0 );`, 
+                debug_fragment_output 
+            );
+        }
+		this.#_deferredShading.finalShader = new RawShaderMaterial({
             vertexShader: basicVertex.trim(),
-            fragmentShader: finalRenderFragment.trim(),
-            uniforms: {
+            fragmentShader: fragmentShader.trim(),
+            uniforms: Object.assign({
+                // Three.js uniforms:
+                cameraPosition: { value: new Vector3() },
+                viewMatrix: { value: new Matrix4() },
+                // MRT uniforms:
                 tPosition: { value: this.#_MRT.texture[ 0 ] },
                 tNormal: { value: this.#_MRT.texture[ 1 ] },
                 tDiffuse: { value: this.#_MRT.texture[ 2 ] },
                 tSpecular: { value: this.#_MRT.texture[ 3 ] },
-                uCameraPosition: { value: new Vector3() },
                 materials: { value: [
                     {
                         unlit: true,
@@ -51663,108 +51713,99 @@ class Engine {
                         shininess: 0
                     }
                 ] }
-            },
-            // glslVersion: THREE.GLSL3
+            }, UniformsLib['lights'] ),
+            lights: true,
         });
-        this.#_postProcessing.quad = new Mesh(
-			new PlaneGeometry( 2, 2 ),
-            this.#_postProcessing.finalShader
+        this.#_deferredShading.fullScreenTriangle = new Mesh(
+            new FullScreenTriangleGeometry(),
+            this.#_deferredShading.finalShader
         );
-		this.#_postProcessing.scene.add( this.#_postProcessing.quad );
+        this.#_deferredShading.fullScreenTriangle.frustumCulled = false;
 
-        const P_light = new PointLight( 0xff6600, 2.0 );
-        P_light.position.set( 0, 4, 0 );
-        const D_light = new DirectionalLight( 0xff0000, 2.0 );
-        D_light.position.set( 4, 4, 0 );
-        const D_light2 = new DirectionalLight( 0xff0000, 0.5 );
-        D_light2.position.set( -4, 3, 0 );
-        new AmbientLight( 0xffffff, 1 );
-		// this.#_postProcessing.scene.add( P_light );
-		this.#_postProcessing.scene.add( D_light );
-		this.#_postProcessing.scene.add( D_light2 );
-		// this.#_postProcessing.scene.add( A_light );
+        if ( this.#_settings.debugger ) {
+            this.#_setupDebugger();
+        }
+        this.#_overrideTHREE();
 
-        console.log( 'this.#_postProcessing.finalShader:', this.#_postProcessing.finalShader );
-
-        this.#_stitchPrograms();
-        this.#_overrideTHREE( ogar );
-        
         let onWindowResize = () => {
             this.#_renderer.setSize( window.innerWidth, window.innerHeight );
 			// const dpr = this.#_renderer.getPixelRatio();
 			this.#_MRT.setSize( window.innerWidth, window.innerHeight );
-			// this.render();
         };
         window.addEventListener('resize', onWindowResize, false);
     }
 
-    // Extends some THREE.JS classes for the purposes of the engine
-    #_overrideTHREE( ogar ) {
-
-        // const engine = self;
-        let self = this;
-
-        class RMesh extends Mesh {
-            constructor( geometry, material ) {
-
-                super( geometry, material );
-
-                // self.#_materials.add( material );
-                // self.#_geometries.add( geometry );
-                // self.#_meshes.add( this );
-                // console.log( 'hello hello!' );
-                // console.log( self.#_materials );
-
-                // this.destroy = () => {
-                //     self.#_materials.remove( material );
-                //     self.#_geometries.remove( geometry );
-                //     self.#_meshes.remove( this );
-
-                //     geometry.dispose();
-                //     material.dispose();
-                // };
-
-                self.materials.add( material );
-                self.geometries.add( geometry );
-                self.meshes.add( this );
-                console.log( 'new OGAR.Mesh' );
-                console.log( 'Engine materials:', self.materials );
-
-                this.destroy = () => {
-                    self.materials.remove( material );
-                    self.geometries.remove( geometry );
-                    self.meshes.remove( this );
-
-                    geometry.dispose();
-                    material.dispose();
-                };
-            }
-        }
-        console.log( 'overriding THREE' );
-
-        // Object.defineProperties( THREE, {
-        //     Mesh: {
-        //         get: () => RMesh
-        //     }
-        // } );
-
-        // THREE.Mesh = RMesh;
-        ogar.Mesh = RMesh;
+    #_setupDebugger() {
+        this.debugger = new Debugger();
+        this.debugger.addLine( this.#_renderer.info.render, 'triangles', 'Triangles', false );
+        this.debugger.addLine( this.#_renderer.info.render, 'calls', 'Draw Calls', false );
+        this.debugger.addLine( this.#_renderer.info.programs, 'length', 'Programs' );
+        this.debugger.addLine( this.#_renderer.info.memory, 'geometries', 'Geometries' );
+        this.debugger.addLine( this.#_renderer.info.memory, 'textures', 'Textures' );
     }
 
-    #_stitchPrograms() { // TODO
+    // TODO: Extends some THREE.JS classes for the purposes of the engine
+    #_overrideTHREE() {
 
+        // const engine = this;
+        // const oldObject3dAdd = THREE.Object3D.prototype.add;
+        // THREE.Object3D.prototype.add = function( object ) {
+        //     // -> this.add( object )
+        //     oldObject3dAdd.apply( this, arguments );
+        // }
+    }
+
+    #_updateGMaterialsCamera( scene, camera ) {
+
+        this.#_gBufferMaterials = {};
+
+        scene.traverseVisible( ( object ) => {
+            // collect all g-buffer materials in the scene
+            if ( object.isMesh && object.material instanceof GBufferMaterial && !this.#_gBufferMaterials[object.material.uuid] ) {
+                this.#_gBufferMaterials[object.material.uuid] = object.material;
+            }
+        });
+
+        for ( const id in this.#_gBufferMaterials ) {
+            if (this.#_gBufferMaterials[id].camera !== camera ) this.#_gBufferMaterials[id].camera = camera;
+        }
     }
 
     render( scene, camera ) {
+
         // render scene into Multiple Render Targets
+        this.#_updateGMaterialsCamera( scene, camera );
 		this.#_renderer.setRenderTarget( this.#_MRT );
 		this.#_renderer.render( scene, camera );
 
+        // needs to update here to show user scene render data, instead of deferred shading triangle
+        if ( this.#_settings.debugger ) {
+            this.debugger.getLine( 'Triangles' ).update();
+            this.debugger.getLine( 'Draw Calls' ).update();
+        }
+
+        // hide user scene objects visibility and show fullscreen triangle
+        scene.traverseVisible( ( object ) => {
+            if ( object.isMesh || object.isPoints || object.isLine ) {
+                this.#_visibleObjects.push( object );
+                object.layers.set( this.deferredShadingLayer ); // dont render user scene meshes during deferred shading
+            }
+        });
+        scene.add( this.#_deferredShading.fullScreenTriangle );
+
+        this.#_deferredShading.finalShader.uniforms.cameraPosition.value.setFromMatrixPosition( camera.matrixWorld );
+        this.#_deferredShading.finalShader.uniforms.viewMatrix.value = camera.matrixWorldInverse;
+
 		// render post FX
-        this.#_postProcessing.finalShader.uniforms.uCameraPosition.value = camera.position;
 		this.#_renderer.setRenderTarget( null );
-		this.#_renderer.render( this.#_postProcessing.scene, this.#_postProcessing.camera );
+		this.#_renderer.render( scene, camera );
+
+        // restore user scene objects visibility and hide fullscreen triangle
+        for( let i = 0, len = this.#_visibleObjects.length; i < len; i++ ) {
+            this.#_visibleObjects[i].layers.set( 0 );
+        }
+        this.#_visibleObjects = [];
+        scene.remove( this.#_deferredShading.fullScreenTriangle );
     }
 
     setSizeMRT( width, height ) { // TODO: use this once engine supports canvas size other than full window
@@ -51772,10 +51813,10 @@ class Engine {
     }
 }
 
-const OGAR = { 
+const OGAR = {
     Engine,
     OGARExporter, OGARLoader,
-    gBufferMaterial
+    GBufferMaterial
 };
 Object.assign( OGAR, THREE );
 

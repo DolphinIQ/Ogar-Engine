@@ -1,61 +1,44 @@
 // THREE
 import * as THREE from 'three';
-// import * as Threejs from 'three';
-// const THREE = Object.assign( THREE, Threejs );
 
 // LOADERS
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OGARExporter } from './loaders/OGARExporter.js';
 import { OGARLoader } from './loaders/OGARLoader.js';
 
 // SHADERS
 import { basicVertex } from './shaders/basicVertex.glsl.js';
 import { finalRenderFragment } from './shaders/finalRender.glsl.js';
+import debug_fragment_output from './shaders/chunks/debug_fragment_output.glsl.js';
 
 // MATERIALS
-import { gBufferMaterial } from './materials/gBufferMaterial.js';
+import { GBufferMaterial } from './materials/GBufferMaterial.js';
+
+// GEOMETRIES
+import { FullScreenTriangleGeometry } from './geometries/FullScreenTriangleGeometry.js';
 
 // UTILITY
 import { WEBGL } from 'three/examples/jsm/WebGL.js';
+import { Debugger } from './utils/debugger.js';
 
-
-import {
-    createWorld,
-    addEntity,
-    removeEntity,
-
-    defineComponent,
-    addComponent,
-    removeComponent,
-    hasComponent,
-
-    defineQuery,
-    Changed,
-    Not,
-    enterQuery,
-    exitQuery,
-
-    defineSystem,
-
-    defineSerializer,
-    defineDeserializer,
-
-    pipe,
-} from 'bitecs';
 
 class Engine {
 
     #_renderer;
     #_MRT;
-    #_postProcessing;
+    #_deferredShading;
 
-    // #_materials;
-    // #_geometries;
-    // #_textures;
-    // #_meshes;
-    // #_lights;
+    #_gBufferMaterials
+    #_settings
+    #_visibleObjects
 
-    constructor() {
+    /**
+     * 
+     * @param { DOM } element - element to append webgl canvas
+     * @param { Object } engineOptions - options of the engine:
+     * - debugger - whether to use the debugger
+     * @param { Object } rendererOptions - options for the THREE.WebGLRenderer
+     */
+     constructor( element, engineOptions, rendererOptions ) {
 
         // Detect WebGL support
         if ( !WEBGL.isWebGL2Available() ) {
@@ -64,40 +47,38 @@ class Engine {
             document.body.appendChild( warning );
             return;
         }
-    }
-
-    /**
-     * 
-     * @param {DOM} element - element to append webgl canvas
-     */
-    init( element, ogar ) {
 
         console.log('OGAR initialized!');
-        let self = this;
 
-        const settings = {
+        this.#_settings = {
+            debugger: engineOptions.debugger,
+            debugGbuffer: engineOptions.debugGbuffer,
             shadows: {
                 enabled: false,
             }
         }
 
-        this.materials = new Set();
-        this.geometries = new Set();
-        this.textures = new Set();
-        this.meshes = new Set();
-        this.lights = new Set();
+        this.deferredShadingLayer = 31; // layer to swap objects to, during rendering
+        // this.materials = {};
+        this.#_visibleObjects = [];
 
-        this.#_renderer = new THREE.WebGLRenderer({ precision: 'highp' });
+        const rendererParameters = rendererOptions || { precision: 'highp' };
+        this.#_renderer = new THREE.WebGLRenderer( rendererParameters );
         this.#_renderer.setSize( window.innerWidth, window.innerHeight );
+        this.#_renderer.setPixelRatio( window.devicePixelRatio );
+
         this.canvas = this.#_renderer.domElement;
         element.appendChild( this.canvas );
-        if( settings.shadows.enabled ){ 
+        if ( this.#_settings.shadows.enabled ) {
+
             this.#_renderer.shadowMap.enabled = true;
             this.#_renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             // this.#_renderer.shadowMap.autoUpdate = false;
         }
         this.#_renderer.outputEncoding = THREE.sRGBEncoding;
         this.#_renderer.physicallyCorrectLights = true;
+
+        console.log( 'Renderer:', this.#_renderer ); 
 
         // Create a multi render target with Float buffers
 		this.#_MRT = new THREE.WebGLMultipleRenderTargets(
@@ -119,20 +100,30 @@ class Engine {
 		this.#_MRT.texture[ 2 ].name = 'diffuse';
 		this.#_MRT.texture[ 3 ].name = 'specular';
 
-        // PostProcessing quad setup
-        this.#_postProcessing = {};
-		this.#_postProcessing.scene = new THREE.Scene();
-		this.#_postProcessing.camera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
+        // PostProcessing full-screen triangle setup
+        this.#_deferredShading = {};
+		this.#_deferredShading.scene = new THREE.Scene();
+		this.#_deferredShading.camera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
 
-		this.#_postProcessing.finalShader = new THREE.RawShaderMaterial({
+        let fragmentShader = finalRenderFragment;
+        if ( this.#_settings.debugGbuffer ) {
+            fragmentShader = fragmentShader.replace( 
+                `finalColor = vec4( outgoingLight, 1.0 );`, 
+                debug_fragment_output 
+            );
+        }
+		this.#_deferredShading.finalShader = new THREE.RawShaderMaterial({
             vertexShader: basicVertex.trim(),
-            fragmentShader: finalRenderFragment.trim(),
-            uniforms: {
+            fragmentShader: fragmentShader.trim(),
+            uniforms: Object.assign({
+                // Three.js uniforms:
+                cameraPosition: { value: new THREE.Vector3() },
+                viewMatrix: { value: new THREE.Matrix4() },
+                // MRT uniforms:
                 tPosition: { value: this.#_MRT.texture[ 0 ] },
                 tNormal: { value: this.#_MRT.texture[ 1 ] },
                 tDiffuse: { value: this.#_MRT.texture[ 2 ] },
                 tSpecular: { value: this.#_MRT.texture[ 3 ] },
-                uCameraPosition: { value: new THREE.Vector3() },
                 materials: { value: [
                     {
                         unlit: true,
@@ -141,108 +132,99 @@ class Engine {
                         shininess: 0
                     }
                 ] }
-            },
-            // glslVersion: THREE.GLSL3
+            }, THREE.UniformsLib['lights'] ),
+            lights: true,
         });
-        this.#_postProcessing.quad = new THREE.Mesh(
-			new THREE.PlaneGeometry( 2, 2 ),
-            this.#_postProcessing.finalShader
+        this.#_deferredShading.fullScreenTriangle = new THREE.Mesh(
+            new FullScreenTriangleGeometry(),
+            this.#_deferredShading.finalShader
         );
-		this.#_postProcessing.scene.add( this.#_postProcessing.quad );
+        this.#_deferredShading.fullScreenTriangle.frustumCulled = false;
 
-        const P_light = new THREE.PointLight( 0xff6600, 2.0 );
-        P_light.position.set( 0, 4, 0 );
-        const D_light = new THREE.DirectionalLight( 0xff0000, 2.0 );
-        D_light.position.set( 4, 4, 0 );
-        const D_light2 = new THREE.DirectionalLight( 0xff0000, 0.5 );
-        D_light2.position.set( -4, 3, 0 );
-        const A_light = new THREE.AmbientLight( 0xffffff, 1 );
-		// this.#_postProcessing.scene.add( P_light );
-		this.#_postProcessing.scene.add( D_light );
-		this.#_postProcessing.scene.add( D_light2 );
-		// this.#_postProcessing.scene.add( A_light );
+        if ( this.#_settings.debugger ) {
+            this.#_setupDebugger();
+        }
+        this.#_overrideTHREE();
 
-        console.log( 'this.#_postProcessing.finalShader:', this.#_postProcessing.finalShader );
-
-        this.#_stitchPrograms();
-        this.#_overrideTHREE( ogar );
-        
         let onWindowResize = () => {
             this.#_renderer.setSize( window.innerWidth, window.innerHeight );
 			// const dpr = this.#_renderer.getPixelRatio();
 			this.#_MRT.setSize( window.innerWidth, window.innerHeight );
-			// this.render();
         }
         window.addEventListener('resize', onWindowResize, false);
     }
 
-    // Extends some THREE.JS classes for the purposes of the engine
-    #_overrideTHREE( ogar ) {
-
-        // const engine = self;
-        let self = this;
-
-        class RMesh extends THREE.Mesh {
-            constructor( geometry, material ) {
-
-                super( geometry, material );
-
-                // self.#_materials.add( material );
-                // self.#_geometries.add( geometry );
-                // self.#_meshes.add( this );
-                // console.log( 'hello hello!' );
-                // console.log( self.#_materials );
-
-                // this.destroy = () => {
-                //     self.#_materials.remove( material );
-                //     self.#_geometries.remove( geometry );
-                //     self.#_meshes.remove( this );
-
-                //     geometry.dispose();
-                //     material.dispose();
-                // };
-
-                self.materials.add( material );
-                self.geometries.add( geometry );
-                self.meshes.add( this );
-                console.log( 'new OGAR.Mesh' );
-                console.log( 'Engine materials:', self.materials );
-
-                this.destroy = () => {
-                    self.materials.remove( material );
-                    self.geometries.remove( geometry );
-                    self.meshes.remove( this );
-
-                    geometry.dispose();
-                    material.dispose();
-                };
-            }
-        }
-        console.log( 'overriding THREE' );
-
-        // Object.defineProperties( THREE, {
-        //     Mesh: {
-        //         get: () => RMesh
-        //     }
-        // } );
-
-        // THREE.Mesh = RMesh;
-        ogar.Mesh = RMesh;
+    #_setupDebugger() {
+        this.debugger = new Debugger();
+        this.debugger.addLine( this.#_renderer.info.render, 'triangles', 'Triangles', false );
+        this.debugger.addLine( this.#_renderer.info.render, 'calls', 'Draw Calls', false );
+        this.debugger.addLine( this.#_renderer.info.programs, 'length', 'Programs' );
+        this.debugger.addLine( this.#_renderer.info.memory, 'geometries', 'Geometries' );
+        this.debugger.addLine( this.#_renderer.info.memory, 'textures', 'Textures' );
     }
 
-    #_stitchPrograms() { // TODO
+    // TODO: Extends some THREE.JS classes for the purposes of the engine
+    #_overrideTHREE() {
 
+        // const engine = this;
+        // const oldObject3dAdd = THREE.Object3D.prototype.add;
+        // THREE.Object3D.prototype.add = function( object ) {
+        //     // -> this.add( object )
+        //     oldObject3dAdd.apply( this, arguments );
+        // }
+    }
+
+    #_updateGMaterialsCamera( scene, camera ) {
+
+        this.#_gBufferMaterials = {};
+
+        scene.traverseVisible( ( object ) => {
+            // collect all g-buffer materials in the scene
+            if ( object.isMesh && object.material instanceof GBufferMaterial && !this.#_gBufferMaterials[object.material.uuid] ) {
+                this.#_gBufferMaterials[object.material.uuid] = object.material;
+            }
+        });
+
+        for ( const id in this.#_gBufferMaterials ) {
+            if (this.#_gBufferMaterials[id].camera !== camera ) this.#_gBufferMaterials[id].camera = camera;
+        }
     }
 
     render( scene, camera ) {
+
         // render scene into Multiple Render Targets
+        this.#_updateGMaterialsCamera( scene, camera );
 		this.#_renderer.setRenderTarget( this.#_MRT );
 		this.#_renderer.render( scene, camera );
 
+        // needs to update here to show user scene render data, instead of deferred shading triangle
+        if ( this.#_settings.debugger ) {
+            this.debugger.getLine( 'Triangles' ).update();
+            this.debugger.getLine( 'Draw Calls' ).update();
+        }
+
+        // hide user scene objects visibility and show fullscreen triangle
+        scene.traverseVisible( ( object ) => {
+            if ( object.isMesh || object.isPoints || object.isLine ) {
+                this.#_visibleObjects.push( object );
+                object.layers.set( this.deferredShadingLayer ); // dont render user scene meshes during deferred shading
+            }
+        });
+        scene.add( this.#_deferredShading.fullScreenTriangle );
+
+        this.#_deferredShading.finalShader.uniforms.cameraPosition.value.setFromMatrixPosition( camera.matrixWorld );
+        this.#_deferredShading.finalShader.uniforms.viewMatrix.value = camera.matrixWorldInverse;
+
 		// render post FX
-        this.#_postProcessing.finalShader.uniforms.uCameraPosition.value = camera.position;
 		this.#_renderer.setRenderTarget( null );
-		this.#_renderer.render( this.#_postProcessing.scene, this.#_postProcessing.camera );
+		this.#_renderer.render( scene, camera );
+
+        // restore user scene objects visibility and hide fullscreen triangle
+        for( let i = 0, len = this.#_visibleObjects.length; i < len; i++ ) {
+            this.#_visibleObjects[i].layers.set( 0 );
+        }
+        this.#_visibleObjects = [];
+        scene.remove( this.#_deferredShading.fullScreenTriangle );
     }
 
     setSizeMRT( width, height ) { // TODO: use this once engine supports canvas size other than full window
@@ -250,17 +232,11 @@ class Engine {
     }
 }
 
-const OGAR = { 
+const OGAR = {
     Engine,
     OGARExporter, OGARLoader,
-    gBufferMaterial
+    GBufferMaterial
 };
 Object.assign( OGAR, THREE );
-
-// OGAR.Mesh = class {
-//     constructor() {
-//         this.a = 8;
-//     }
-// }
 
 export { OGAR };
