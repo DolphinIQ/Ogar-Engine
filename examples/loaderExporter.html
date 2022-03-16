@@ -6,26 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title> Ogar Exporter/Loader Usage </title>
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: inherit;
-        }
-        body {
-            background-color: red;
-            box-sizing: border-box;
-            overflow: hidden;
-        }
-        .info {
-            position: absolute;
-            top: 3%;
-            left: 50%;
-            transform: translateX( -50% );
-            font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
-            color: #eee;
-        }
-    </style>
+    <link rel="stylesheet" href="css/examples.css">
 </head>
 <body>
 
@@ -49,8 +30,6 @@
 
         init();
         function init() {
-
-            console.log( OGAR );
 
             const engineOptions = {
                 debugger: true
@@ -90,13 +69,10 @@
             p2.position.set( -10, -2, 10 );
             scene.add( p1, p2, a1 );
 
-            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
             material = new OGAR.GBufferMaterial({
                 shininess: 90,
                 color: 0xffffff
             });
-            const mesh = new OGAR.Mesh( geometry, material );
-            console.log( 'Original model:', mesh );
             
             // Init loaders
             ogarExporter = new OGAR.OGARExporter();

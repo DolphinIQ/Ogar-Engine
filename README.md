@@ -8,7 +8,9 @@
 
 **R** endering
 
-## [ECS](https://en.wikipedia.org/wiki/Entity_component_system) Deferred Rendering Engine
+## Deferred Rendering Engine
+
+**OGAR Engine** is a transformation of [Three.js](https://threejs.org) into a deferred engine. Goal of this project is to give people the option and/or starting point of a deferred shading pipeline, with the familiarity of Three.js friendly API.
 
 **Ogar** 😼 is pronounced as: https://translate.google.com/?hl=pl&sl=pl&tl=en&text=ogar&op=translate
 
@@ -48,9 +50,10 @@ const scene = new OGAR.Scene();
 const camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
 
 const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
-const material = new OGAR.GBufferMaterial({ // The only supported material for now
+const material = new OGAR.GBufferMaterial({ // The only Phong-based supported material for now
     shininess: 25,
-    map: diffuseTexture
+    map: diffuseTexture,
+    normalMap: normalTexture
 });
 const mesh = new OGAR.Mesh( geometry, material );
 scene.add( mesh );

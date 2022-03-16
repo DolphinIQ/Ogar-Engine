@@ -6,26 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title> Basic Scene Ogar Engine Usage </title>
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: inherit;
-        }
-        body {
-            background-color: red;
-            box-sizing: border-box;
-            overflow: hidden;
-        }
-        .info {
-            position: absolute;
-            top: 3%;
-            left: 50%;
-            transform: translateX( -50% );
-            font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
-            color: #eee;
-        }
-    </style>
+    <link rel="stylesheet" href="css/examples.css">
 </head>
 <body>
 
@@ -41,8 +22,6 @@
         // UTILITY
         import Stats from './utils/stats.module.js';
         import { GUI } from './utils/dat.gui.module.js';
-
-        console.log( OGAR );
 
         let engine, scene, camera, clock, delta;
         let orbitControls, stats, gui;
@@ -101,8 +80,8 @@
             const ROWS = 5;
             const DISTANCE = 2;
             addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
-            const mesh = new OGAR.Mesh( geometry, material ); // mesh for debug
-            console.log( mesh );
+            const mesh = new OGAR.Mesh( geometry, material ); // mesh for debugging
+            console.log( 'Grid mesh:', mesh );
 
             window.addEventListener('resize', onWindowResize, false);
 
