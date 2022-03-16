@@ -48,8 +48,6 @@ class Engine {
             return;
         }
 
-        console.log('OGAR initialized!');
-
         this.#_settings = {
             debugger: engineOptions.debugger,
             debugGbuffer: engineOptions.debugGbuffer,
@@ -78,8 +76,6 @@ class Engine {
         this.#_renderer.outputEncoding = THREE.sRGBEncoding;
         this.#_renderer.physicallyCorrectLights = true;
 
-        console.log( 'Renderer:', this.#_renderer ); 
-
         // Create a multi render target with Float buffers
 		this.#_MRT = new THREE.WebGLMultipleRenderTargets(
 			window.innerWidth, // * window.devicePixelRatio,
@@ -98,7 +94,7 @@ class Engine {
 		this.#_MRT.texture[ 0 ].name = 'position';
 		this.#_MRT.texture[ 1 ].name = 'normal';
 		this.#_MRT.texture[ 2 ].name = 'diffuse';
-		this.#_MRT.texture[ 3 ].name = 'specular';
+		this.#_MRT.texture[ 3 ].name = 'emissive';
 
         // PostProcessing full-screen triangle setup
         this.#_deferredShading = {};
@@ -120,18 +116,10 @@ class Engine {
                 cameraPosition: { value: new THREE.Vector3() },
                 viewMatrix: { value: new THREE.Matrix4() },
                 // MRT uniforms:
-                tPosition: { value: this.#_MRT.texture[ 0 ] },
-                tNormal: { value: this.#_MRT.texture[ 1 ] },
-                tDiffuse: { value: this.#_MRT.texture[ 2 ] },
-                tSpecular: { value: this.#_MRT.texture[ 3 ] },
-                materials: { value: [
-                    {
-                        unlit: true,
-                        diffuse: new THREE.Vector3( 1, 1, 1 ),
-                        specularColor: new THREE.Vector3( 0.1, 0.1, 0.1 ),
-                        shininess: 0
-                    }
-                ] }
+                gPosition: { value: this.#_MRT.texture[ 0 ] },
+                gNormal: { value: this.#_MRT.texture[ 1 ] },
+                gDiffuse: { value: this.#_MRT.texture[ 2 ] },
+                gEmissive: { value: this.#_MRT.texture[ 3 ] }
             }, THREE.UniformsLib['lights'] ),
             lights: true,
         });

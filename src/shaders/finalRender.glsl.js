@@ -7,13 +7,6 @@ const finalRenderFragment = /*glsl*/`#version 300 es
     precision highp float;
     #define PHONG
 
-    struct Material {
-        bool unlit;
-        vec3 diffuse;
-        vec3 specular;
-        float shininess;
-    };
-
     in vec2 vUv;
     
     // Built-in three.js uniforms
@@ -24,11 +17,10 @@ const finalRenderFragment = /*glsl*/`#version 300 es
     // uniform mat3 normalMatrix; // = inverse transpose of modelViewMatrix
     uniform vec3 cameraPosition; // = camera position in world space (orthographic for deferred shaded quad)
 
-    uniform sampler2D tPosition;
-    uniform sampler2D tNormal;
-    uniform sampler2D tDiffuse;
-    uniform sampler2D tSpecular;
-    uniform Material materials[ 256 ];
+    uniform sampler2D gPosition;
+    uniform sampler2D gNormal;
+    uniform sampler2D gDiffuse;
+    uniform sampler2D gEmissive;
 
     layout(location = 0) out vec4 finalColor; 
 
@@ -68,13 +60,13 @@ const finalRenderFragment = /*glsl*/`#version 300 es
 
         // G-Buffer data
         vec2 uv = vUv;
-        vec3 position = texture( tPosition, uv ).xyz;
-        float depth = texture( tPosition, uv ).a;
-        vec3 normal = normalize( texture( tNormal, uv ).xyz );
-        float materialID = texture( tNormal, uv ).a * 255.0;
-        vec3 diffuseColor = texture( tDiffuse, uv ).rgb;
-        vec3 specular = texture( tSpecular, uv ).rgb;
-        float shininess = texture( tSpecular, uv ).a;
+        vec3 position = texture( gPosition, uv ).xyz;
+        float depth = texture( gPosition, uv ).a;
+        vec3 normal = normalize( texture( gNormal, uv ).xyz );
+        vec3 diffuseColor = texture( gDiffuse, uv ).rgb;
+        vec3 emissiveColor = texture( gEmissive, uv ).rgb;
+        float shininess = texture( gEmissive, uv ).a;
+        vec3 specular = vec3( texture( gNormal, uv ).a );
 
         vec4 mvPosition = viewMatrix * vec4( position, 1.0 );
         vec3 vViewPosition = - mvPosition.xyz;
@@ -83,19 +75,19 @@ const finalRenderFragment = /*glsl*/`#version 300 es
         // TODO: vec3 totalEmissiveRadiance = emissive;
 
         // Accumulation
-        // edited: #include <lights_phong_fragment>
+        // #include <lights_phong_fragment> : edited start
         BlinnPhongMaterial material;
         material.diffuseColor = diffuseColor.rgb;
         material.specularColor = specular;
         material.specularShininess = shininess;
         material.specularStrength = 1.0;
-        // end edited: #include <lights_phong_fragment>
+        // #include <lights_phong_fragment> : edited end
         ${ lights_fragment_begin }
         // #include <lights_fragment_maps>
         #include <lights_fragment_end>
 
         vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + 
-            reflectedLight.directSpecular + reflectedLight.indirectSpecular;
+            reflectedLight.directSpecular + reflectedLight.indirectSpecular + emissiveColor;
 
         finalColor = vec4( outgoingLight, 1.0 );
     }

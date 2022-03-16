@@ -42,12 +42,10 @@
         import Stats from './utils/stats.module.js';
         import { GUI } from './utils/dat.gui.module.js';
 
-        console.log( OGAR );
-
         let engine, scene, camera, clock, delta, time;
         let orbitControls, stats, gui;
         let textureLoader;
-        let lightObj;
+        let lightRotator;
 
         init();
 
@@ -90,24 +88,25 @@
             textureLoader = new OGAR.TextureLoader();
 
             const diffuseTexture = textureLoader.load('textures/ogar_hi.png');
+            const normalMap = textureLoader.load('textures/normal_map.png');
 
-            // const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 ); // cubes
-            const geometry = new OGAR.SphereBufferGeometry( 0.6, 32, 16 ); // spheres
+            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 ); // cubes
+            // const geometry = new OGAR.SphereBufferGeometry( 0.6, 32, 16 ); // spheres
             const material = new OGAR.GBufferMaterial({
                 shininess: 25,
-                map: diffuseTexture
+                map: diffuseTexture,
+                // normalMap: normalMap
             });
+
+            setTimeout( () => {
+                material.normalMap = normalMap;
+            }, 2000 );
 
             const ROWS = 5;
             const DISTANCE = 2;
             addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
             const mesh = new OGAR.Mesh( geometry, material );
-            console.log( mesh );
-
-            const pointLightHelper = new OGAR.Mesh(
-                new OGAR.SphereBufferGeometry( 0.1, 8, 8 ),
-                new OGAR.GBufferMaterial({ color: 0xffffff })
-            );
+            console.log( 'Grid mesh:', mesh );
 
             // Different sets of lighting for testing
             const A_light = new OGAR.AmbientLight( 0xffffff, 0.3 );
@@ -119,10 +118,15 @@
             S_light.position.set( 3, 5, 3 );
             const H_light = new OGAR.HemisphereLight( 0xff0000, 0x00ff00, 1 );
 
-            lightObj = new OGAR.Object3D();
+            const pointLightHelper = new OGAR.Mesh(
+                new OGAR.SphereBufferGeometry( 0.1, 8, 8 ),
+                new OGAR.GBufferMaterial({ emissive: 0xffffff })
+            );
+            lightRotator = new OGAR.Object3D();
+
             P_light.add( pointLightHelper );
-            lightObj.add( P_light );
-            scene.add( lightObj );
+            lightRotator.add( P_light );
+            scene.add( lightRotator );
             // scene.add( A_light );
             // scene.add( D_light );
             // scene.add( S_light );
@@ -151,7 +155,7 @@
             time = clock.getElapsedTime();
             orbitControls.update();
 
-            lightObj.rotation.y += 1 * delta;
+            lightRotator.rotation.y += 0.8 * delta;
 
             engine.render( scene, camera );
 

@@ -51128,13 +51128,6 @@ const finalRenderFragment = /*glsl*/`#version 300 es
     precision highp float;
     #define PHONG
 
-    struct Material {
-        bool unlit;
-        vec3 diffuse;
-        vec3 specular;
-        float shininess;
-    };
-
     in vec2 vUv;
     
     // Built-in three.js uniforms
@@ -51145,11 +51138,10 @@ const finalRenderFragment = /*glsl*/`#version 300 es
     // uniform mat3 normalMatrix; // = inverse transpose of modelViewMatrix
     uniform vec3 cameraPosition; // = camera position in world space (orthographic for deferred shaded quad)
 
-    uniform sampler2D tPosition;
-    uniform sampler2D tNormal;
-    uniform sampler2D tDiffuse;
-    uniform sampler2D tSpecular;
-    uniform Material materials[ 256 ];
+    uniform sampler2D gPosition;
+    uniform sampler2D gNormal;
+    uniform sampler2D gDiffuse;
+    uniform sampler2D gEmissive;
 
     layout(location = 0) out vec4 finalColor; 
 
@@ -51189,13 +51181,13 @@ const finalRenderFragment = /*glsl*/`#version 300 es
 
         // G-Buffer data
         vec2 uv = vUv;
-        vec3 position = texture( tPosition, uv ).xyz;
-        float depth = texture( tPosition, uv ).a;
-        vec3 normal = normalize( texture( tNormal, uv ).xyz );
-        float materialID = texture( tNormal, uv ).a * 255.0;
-        vec3 diffuseColor = texture( tDiffuse, uv ).rgb;
-        vec3 specular = texture( tSpecular, uv ).rgb;
-        float shininess = texture( tSpecular, uv ).a;
+        vec3 position = texture( gPosition, uv ).xyz;
+        float depth = texture( gPosition, uv ).a;
+        vec3 normal = normalize( texture( gNormal, uv ).xyz );
+        vec3 diffuseColor = texture( gDiffuse, uv ).rgb;
+        vec3 emissiveColor = texture( gEmissive, uv ).rgb;
+        float shininess = texture( gEmissive, uv ).a;
+        vec3 specular = vec3( texture( gNormal, uv ).a );
 
         vec4 mvPosition = viewMatrix * vec4( position, 1.0 );
         vec3 vViewPosition = - mvPosition.xyz;
@@ -51204,54 +51196,85 @@ const finalRenderFragment = /*glsl*/`#version 300 es
         // TODO: vec3 totalEmissiveRadiance = emissive;
 
         // Accumulation
-        // edited: #include <lights_phong_fragment>
+        // #include <lights_phong_fragment> : edited start
         BlinnPhongMaterial material;
         material.diffuseColor = diffuseColor.rgb;
         material.specularColor = specular;
         material.specularShininess = shininess;
         material.specularStrength = 1.0;
-        // end edited: #include <lights_phong_fragment>
+        // #include <lights_phong_fragment> : edited end
         ${ lights_fragment_begin }
         // #include <lights_fragment_maps>
         #include <lights_fragment_end>
 
         vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + 
-            reflectedLight.directSpecular + reflectedLight.indirectSpecular;
+            reflectedLight.directSpecular + reflectedLight.indirectSpecular + emissiveColor;
 
         finalColor = vec4( outgoingLight, 1.0 );
     }
 `;
 
-class EmptyTexture extends CanvasTexture {
-    constructor() {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 1;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect( 0, 0, 1, 1 );
-        super( canvas );
-    }
-}
-
-const gBufferVertex = /*glsl*/`#version 300 es
-    precision highp float;
-
-    in vec3 position;
-    in vec3 normal;
-    in vec2 uv;
-
-    uniform mat4 modelMatrix;
-    uniform mat4 modelViewMatrix;
-    uniform mat4 projectionMatrix;
-    uniform mat3 normalMatrix;
+const gBufferVertex = /*glsl*/`
 
     out vec3 vPosition;
     out vec3 vNormal;
     out vec2 vUv;
+    out vec3 vViewPosition;
+
+    #ifndef FLAT_SHADED
+        #ifdef USE_TANGENT
+
+            varying vec3 vTangent;
+            varying vec3 vBitangent;
+
+        #endif
+    #endif
 
     void main() {
-        // vNormal = normalize( normal );
-        vNormal = normalize( (modelMatrix * vec4( normal, 0.0 )).xyz ); // world space normal
+
+        vec3 objectNormal = vec3( normal );
+        #ifdef USE_TANGENT
+            vec3 objectTangent = vec3( tangent.xyz );
+        #endif
+        #include <morphnormal_vertex>
+        #include <skinbase_vertex>
+	    #include <skinnormal_vertex>
+
+        // #include <defaultnormal_vertex> : edited start
+        vec3 transformedNormal = objectNormal;
+
+        #ifdef USE_INSTANCING
+            // this is in lieu of a per-instance normal-matrix
+            // shear transforms in the instance matrix are not supported
+            mat3 m = mat3( instanceMatrix );
+
+            transformedNormal /= vec3( dot( m[ 0 ], m[ 0 ] ), dot( m[ 1 ], m[ 1 ] ), dot( m[ 2 ], m[ 2 ] ) );
+            transformedNormal = m * transformedNormal;
+        #endif
+
+        // transformedNormal = normalMatrix * transformedNormal;
+
+        #ifdef FLIP_SIDED
+            transformedNormal = - transformedNormal;
+        #endif
+
+        #ifdef USE_TANGENT
+            vec3 transformedTangent = ( modelViewMatrix * vec4( objectTangent, 0.0 ) ).xyz;
+
+            #ifdef FLIP_SIDED
+                transformedTangent = - transformedTangent;
+            #endif
+        #endif
+        // #include <defaultnormal_vertex> : edited end
+
+        #include <normal_vertex>
+
+
+        vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+        vViewPosition = - mvPosition.xyz;
+
+        // vNormal = normalize( (modelMatrix * vec4( transformedNormal, 0.0 )).xyz ); // world space normal
+        vNormal = normalize( (modelMatrix * vec4( vNormal, 0.0 )).xyz ); // world space normal
         vUv = uv;
         vPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz; // vec4 * matrix4 =/= matrix4 * vec4
 
@@ -51259,21 +51282,23 @@ const gBufferVertex = /*glsl*/`#version 300 es
     }
 `;
 
-const gBufferFragment = /*glsl*/`#version 300 es
-    precision highp float;
-
-    uniform sampler2D tDiffuse;
-    uniform float uCameraNear;
-    uniform float uCameraFar;
-    uniform uint uMaterialID;
-    uniform vec3 uSpecularColor;
-    uniform float uShininess;
-    uniform vec3 uColor;
-    // TODO: uniform float uEmission;
+const gBufferFragment = /*glsl*/`
 
     in vec3 vPosition;
     in vec3 vNormal;
     in vec2 vUv;
+    in vec3 vViewPosition;
+
+    #include <map_pars_fragment>
+    #include <emissivemap_pars_fragment>
+    #include <normalmap_pars_fragment>
+
+    uniform float uCameraNear;
+    uniform float uCameraFar;
+    uniform float uSpecular;
+    uniform float uShininess;
+    uniform vec3 uColor;
+    uniform vec3 uEmissive;
 
     #include <packing>
 
@@ -51285,40 +51310,113 @@ const gBufferFragment = /*glsl*/`#version 300 es
     layout(location = 0) out vec4 gPosition;
     layout(location = 1) out vec4 gNormal;
     layout(location = 2) out vec4 gColor;
-    layout(location = 3) out vec4 gSpecular;
+    layout(location = 3) out vec4 gEmissive;
 
     void main() {
         vec3 position = vPosition; // world position
-        vec3 normal = normalize( vNormal ); // world normal
         vec2 uv = vUv;
         float depth = 1.0 - getLinearDepth( gl_FragCoord.z, uCameraNear, uCameraFar );
 
-        vec4 color = texture( tDiffuse, uv ) * vec4( uColor, 1.0 );
+        vec4 diffuseColor = vec4( uColor, 1.0 );
+        vec3 totalEmissiveRadiance = uEmissive;
 
-        // Write position, depth, normal and color data to G-Buffer
-        uint range8bit = uint(255);
-        // uint range8bit = uint(0);
+        #ifdef USE_MAP
+            vec4 texelColor = texture2D( map, uv );
+            texelColor = mapTexelToLinear( texelColor );
+            diffuseColor *= texelColor;
+        #endif
+        
+        #ifdef USE_EMISSIVEMAP
+            vec4 emissiveColor = texture2D( emissiveMap, uv );
+            emissiveColor.rgb = emissiveMapTexelToLinear( emissiveColor ).rgb;
+            totalEmissiveRadiance *= emissiveColor.rgb;
+        #endif
+
+
+        // #include <normal_fragment_begin> : edited start
+        float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
+        #ifdef FLAT_SHADED
+            // Workaround for Adreno GPUs not able to do dFdx( vViewPosition )
+            vec3 fdx = vec3( dFdx( vViewPosition.x ), dFdx( vViewPosition.y ), dFdx( vViewPosition.z ) );
+            vec3 fdy = vec3( dFdy( vViewPosition.x ), dFdy( vViewPosition.y ), dFdy( vViewPosition.z ) );
+            vec3 normal = normalize( cross( fdx, fdy ) );
+        #else
+            vec3 normal = normalize( vNormal ); // world normal
+
+            #ifdef DOUBLE_SIDED
+                normal = normal * faceDirection;
+            #endif
+        #endif
+        // #include <normal_fragment_begin> : edited end
+
+        // #include <normal_fragment_maps> : edited start
+        #ifdef OBJECTSPACE_NORMALMAP
+            // normal = texture2D( normalMap, uv ).xyz * 2.0 - 1.0; // overrides both flatShading and attribute normals
+
+            // #ifdef FLIP_SIDED
+            //     normal = - normal;
+            // #endif
+
+            // #ifdef DOUBLE_SIDED
+            //     normal = normal * faceDirection;
+            // #endif
+
+            // normal = normalize( normalMatrix * normal );
+
+            no support for objectspace normal map
+
+        #elif defined( TANGENTSPACE_NORMALMAP )
+
+            vec3 mapN = texture2D( normalMap, uv ).xyz * 2.0 - 1.0;
+            mapN.xy *= normalScale;
+
+            #ifdef USE_TANGENT
+                normal = normalize( vTBN * mapN );
+            #else
+                normal = perturbNormal2Arb( - vViewPosition, normal, mapN, faceDirection );
+            #endif
+
+        #elif defined( USE_BUMPMAP )
+
+            normal = perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection );
+
+        #endif
+        // #include <normal_fragment_maps> : edited end
+
+
+        // Write position, depth, normal, shading and color data to G-Buffer
         gPosition = vec4( position, depth );
-        gNormal = vec4( normal, uMaterialID / range8bit );
-        gColor = color;
-        gSpecular = vec4( uSpecularColor, uShininess );
+        gNormal = vec4( normal, uSpecular );
+        gColor = diffuseColor;
+        gEmissive = vec4( totalEmissiveRadiance, uShininess );
     }
 `;
 
-class GBufferMaterial extends RawShaderMaterial {
+// Use ShaderMaterial, instead of RawShaderMaterial, in order to have THREE fill material.defines
+class GBufferMaterial extends ShaderMaterial {
 /**
  * Basic G-Buffer Material
  * @param {Object} uniforms - uniforms for the shader
  * 
  * Currently supported:
- * - map - diffuse map
- * - color - color
- * - specular - specular color
- * - shininess - shininess value
+ * - map { THREE.Texture } - diffuse map
+ * - color { THREE.Color } - color
+ * - emissive { THREE.Color } - emissive color
+ * - emissiveMap { THREE.Texture } - emissive map
+ * - emissiveIntensity { Number } - emissive scalar factor
+ * - normalMap { THREE.Texture } - normal map
+ * - normalScale { THREE.Vector2 } - normal map scale
+ * - specular { Number } - specular color - supports only black-white values
+ * - shininess { Number } - shininess value
  */
     #_camera
     #_map
+    #_emissiveMap
+    #_normalMap
+    #_normalScale
     #_color
+    #_emissive
+    #_emissiveIntensity
     #_specular
     #_shininess
 
@@ -51326,49 +51424,37 @@ class GBufferMaterial extends RawShaderMaterial {
 
         super({
             vertexShader: gBufferVertex.trim(),
-            fragmentShader: gBufferFragment.trim()
+            fragmentShader: gBufferFragment.trim(),
+            glslVersion: GLSL3
         });
 
         // Default values fill
-        this.#_map = options.map || new EmptyTexture();
-        if ( options.color ) {
-            this.#_color = options.color.isColor ? options.color : new Color( options.color ); // check for hex
-        } else {
-            this.#_color = new Color( 1, 1, 1 );
-        }
-        // this.#_color = options.color || new Color( 1, 1, 1 );
-        this.#_specular = options.specular || new Color( 0.1, 0.1, 0.1 );
+        this.#_map = options.map;
+        this.#_emissiveMap = options.emissiveMap;
+        this.#_normalMap = options.normalMap;
+		this.normalMapType = TangentSpaceNormalMap;
+        this.#_normalScale = options.normalScale || new Vector2( 1, 1 );
+
+        this.#_color = options.color ? // check for hexadecimal
+            ( options.color.isColor ? options.color : new Color( options.color ) ) : new Color( 1, 1, 1 );
+        this.#_emissive = options.emissive ? // check for hexadecimal
+            ( options.emissive.isColor ? options.emissive : new Color( options.emissive ) ) : new Color( 0, 0, 0 );
+        this.#_emissiveIntensity = options.emissiveIntensity || 1.0;
+        this.#_specular = options.specular || 0.1; // supports only black-white colors
         this.#_shininess = options.shininess || 30;
         this.#_camera = options.camera || { near: 0.1, far: 100 };
-        
-        // this.map = options.map || new EmptyTexture();
-        // this.color = options.color || new Color( 1, 1, 1 );
-        // this.specular = options.specular || new Color( 0.1, 0.1, 0.1 );
-        // this.shininess = options.shininess || 30;
-        // this.camera = options.camera;
 
-        // const uniforms = {};
-        this.uniforms['uMaterialID'] = { value: 0 }; // 0-255
-        this.uniforms['tDiffuse'] = { value: this.#_map };
+        // Uniforms
+        this.uniforms['map'] = { value: this.#_map };
+        this.uniforms['emissiveMap'] = { value: this.#_emissiveMap };
+        this.uniforms['normalMap'] = { value: this.#_normalMap };
+        this.uniforms['normalScale'] = { value: this.#_normalScale };
         this.uniforms['uColor'] = { value: this.#_color };
-        this.uniforms['uSpecularColor'] = { value: this.#_specular };
+        this.uniforms['uEmissive'] = { value: this.#_emissive };
+        this.uniforms['uSpecular'] = { value: this.#_specular };
         this.uniforms['uShininess'] = { value: this.#_shininess };
         this.uniforms['uCameraNear'] = { value: this.#_camera.near };
         this.uniforms['uCameraFar'] = { value: this.#_camera.far };
-
-        // this.uniforms['uMaterialID'] = { value: 0 }; // 0-255
-        // this.uniforms['tDiffuse'] = { value: this.map };
-        // this.uniforms['uColor'] = { value: this.color };
-        // this.uniforms['uSpecularColor'] = { value: this.specular };
-        // this.uniforms['uShininess'] = { value: this.shininess };
-        // this.uniforms['uCameraNear'] = { value: this.camera.near };
-        // this.uniforms['uCameraFar'] = { value: this.camera.far };
-
-        // super({
-        //     uniforms,
-        //     vertexShader: gBufferVertex.trim(),
-        //     fragmentShader: gBufferFragment.trim()
-        // });
     }
 
     get camera() {
@@ -51385,7 +51471,50 @@ class GBufferMaterial extends RawShaderMaterial {
     }
     set map( value ) {
         this.#_map = value;
-        this.uniforms['tDiffuse'].value = value;
+        this.uniforms['map'].value = value;
+    }
+
+    get emissiveMap() {
+        return this.#_emissiveMap;
+    }
+    set emissiveMap( value ) {
+        this.#_emissiveMap = value;
+        this.uniforms['emissiveMap'].value = value;
+    }
+
+    get normalMap() {
+        return this.#_normalMap;
+    }
+    set normalMap( value ) {
+        if ( value ) {
+            this.#_normalMap = value;
+			this.normalMapType = TangentSpaceNormalMap;
+            this.uniforms['normalMap'].value = value;
+		}
+    }
+
+    get normalScale() {
+        return this.#_normalScale;
+    }
+    set normalScale( value ) {
+        this.#_normalScale = value;
+        this.uniforms['normalScale'].value = value;
+    }
+
+    get emissive() {
+        return this.#_emissive;
+    }
+    set emissive( value ) {
+        this.#_emissive = value;
+        this.uniforms['uEmissive'].value = value.multiplyScalar( this.#_emissiveIntensity );
+    }
+
+    get emissiveIntensity() {
+        return this.#_emissiveIntensity;
+    }
+    set emissiveIntensity( value ) {
+        this.#_emissiveIntensity = value;
+        this.uniforms['uEmissive'].value = this.#_emissive.multiplyScalar( value );
     }
 
     get color() {
@@ -51401,7 +51530,7 @@ class GBufferMaterial extends RawShaderMaterial {
     }
     set specular( value ) {
         this.#_specular = value;
-        this.uniforms['uSpecularColor'].value = value;
+        this.uniforms['uSpecular'].value = value;
     }
 
     get shininess() {
@@ -51629,8 +51758,6 @@ class Engine {
             return;
         }
 
-        console.log('OGAR initialized!');
-
         this.#_settings = {
             debugger: engineOptions.debugger,
             debugGbuffer: engineOptions.debugGbuffer,
@@ -51659,8 +51786,6 @@ class Engine {
         this.#_renderer.outputEncoding = sRGBEncoding;
         this.#_renderer.physicallyCorrectLights = true;
 
-        console.log( 'Renderer:', this.#_renderer ); 
-
         // Create a multi render target with Float buffers
 		this.#_MRT = new WebGLMultipleRenderTargets(
 			window.innerWidth, // * window.devicePixelRatio,
@@ -51679,7 +51804,7 @@ class Engine {
 		this.#_MRT.texture[ 0 ].name = 'position';
 		this.#_MRT.texture[ 1 ].name = 'normal';
 		this.#_MRT.texture[ 2 ].name = 'diffuse';
-		this.#_MRT.texture[ 3 ].name = 'specular';
+		this.#_MRT.texture[ 3 ].name = 'emissive';
 
         // PostProcessing full-screen triangle setup
         this.#_deferredShading = {};
@@ -51701,18 +51826,10 @@ class Engine {
                 cameraPosition: { value: new Vector3() },
                 viewMatrix: { value: new Matrix4() },
                 // MRT uniforms:
-                tPosition: { value: this.#_MRT.texture[ 0 ] },
-                tNormal: { value: this.#_MRT.texture[ 1 ] },
-                tDiffuse: { value: this.#_MRT.texture[ 2 ] },
-                tSpecular: { value: this.#_MRT.texture[ 3 ] },
-                materials: { value: [
-                    {
-                        unlit: true,
-                        diffuse: new Vector3( 1, 1, 1 ),
-                        specularColor: new Vector3( 0.1, 0.1, 0.1 ),
-                        shininess: 0
-                    }
-                ] }
+                gPosition: { value: this.#_MRT.texture[ 0 ] },
+                gNormal: { value: this.#_MRT.texture[ 1 ] },
+                gDiffuse: { value: this.#_MRT.texture[ 2 ] },
+                gEmissive: { value: this.#_MRT.texture[ 3 ] }
             }, UniformsLib['lights'] ),
             lights: true,
         });
