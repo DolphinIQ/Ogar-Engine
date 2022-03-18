@@ -12,13 +12,15 @@
 
 **OGAR Engine** is a transformation of [Three.js](https://threejs.org) into a deferred engine. Goal of this project is to give people the option and/or starting point of a deferred shading pipeline, with the familiarity of Three.js friendly API.
 
-**Ogar** 😼 is pronounced as: (https://translate.google.com/?hl=pl&sl=pl&tl=en&text=ogar&op=translate)
+**Ogar** 😼 is pronounced as: [google translate pronunciation](https://translate.google.com/?hl=pl&sl=pl&tl=en&text=ogar&op=translate)
 
 ⚠️ Under development! Engine not ready for use yet! ⚠️
 
 ## View the current examples:
 [Basic Scene](https://dolphiniq.github.io/Ogar-Engine/examples/basicScene)
+
 [Phong Material](https://dolphiniq.github.io/Ogar-Engine/examples/phongMaterial)
+
 [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
 
 ## How to run the examples locally:
