@@ -17,11 +17,9 @@
 ⚠️ Under development! Engine not ready for use yet! ⚠️
 
 ## View the current examples:
-[Basic Scene](https://dolphiniq.github.io/Ogar-Engine/examples/basicScene)
-
-[Phong Material](https://dolphiniq.github.io/Ogar-Engine/examples/phongMaterial)
-
-[Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
+1. [Basic Scene](https://dolphiniq.github.io/Ogar-Engine/examples/basicScene)
+2. [Phong Material](https://dolphiniq.github.io/Ogar-Engine/examples/phongMaterial)
+3. [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
 
 ## How to run the examples locally:
 1. Fork the repository
