@@ -51488,9 +51488,9 @@ class GBufferMaterial extends ShaderMaterial {
     set normalMap( value ) {
         if ( value ) {
             this.#_normalMap = value;
-			this.normalMapType = TangentSpaceNormalMap;
+            this.normalMapType = TangentSpaceNormalMap;
             this.uniforms['normalMap'].value = value;
-		}
+        }
     }
 
     get normalScale() {
