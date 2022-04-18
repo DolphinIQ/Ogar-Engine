@@ -62,14 +62,14 @@
             // gui.add(object, property, [min], [max], [step])
 
             // Add lights to see the objects
-            const p1 = new OGAR.PointLight( 0xffffff, 1.2 );
-            const p2 = new OGAR.PointLight( 0xffffff, 1.6 );
+            const p1 = new OGAR.PointLight( 0xffffff, 1.2, 100, 2 );
+            const p2 = new OGAR.PointLight( 0xffffff, 1.6, 100, 2 );
             const a1 = new OGAR.AmbientLight( 0xffffff, 0.2 );
             p1.position.set( 5, 15, 4 );
             p2.position.set( -10, -2, 10 );
             scene.add( p1, p2, a1 );
 
-            material = new OGAR.GBufferMaterial({
+            material = new OGAR.DeferredMeshPhongMaterial({
                 shininess: 90,
                 color: 0xffffff
             });

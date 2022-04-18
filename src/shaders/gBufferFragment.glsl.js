@@ -32,7 +32,8 @@ const gBufferFragment = /*glsl*/`
     void main() {
         vec3 position = vPosition; // world position
         vec2 uv = vUv;
-        float depth = 1.0 - getLinearDepth( gl_FragCoord.z, uCameraNear, uCameraFar );
+        // float depth = 1.0 - getLinearDepth( gl_FragCoord.z, uCameraNear, uCameraFar );
+        float depth = 1.0 - gl_FragCoord.z;
 
         vec4 diffuseColor = vec4( uColor, 1.0 );
         vec3 totalEmissiveRadiance = uEmissive;

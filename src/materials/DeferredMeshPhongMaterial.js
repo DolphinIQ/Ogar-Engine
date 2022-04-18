@@ -5,9 +5,9 @@ import { gBufferVertex } from '../shaders/gBufferVertex.glsl.js';
 import { gBufferFragment } from '../shaders/gBufferFragment.glsl.js';
 
 // Use ShaderMaterial, instead of RawShaderMaterial, in order to have THREE fill material.defines
-class GBufferMaterial extends ShaderMaterial {
+class DeferredMeshPhongMaterial extends ShaderMaterial {
 /**
- * Basic G-Buffer Material
+ * G-Buffer Deferred Phong Material
  * @param {Object} uniforms - uniforms for the shader
  * 
  * Currently supported:
@@ -152,6 +152,10 @@ class GBufferMaterial extends ShaderMaterial {
         this.#_shininess = value;
         this.uniforms['uShininess'].value = value;
     }
+
+    get isDeferred() {
+        return true;
+    }
 }
 
-export { GBufferMaterial };
+export { DeferredMeshPhongMaterial };
