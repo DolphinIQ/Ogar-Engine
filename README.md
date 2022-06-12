@@ -19,7 +19,7 @@
 ## View the current examples:
 1. [Basic Scene](https://dolphiniq.github.io/Ogar-Engine/examples/basicScene)
 2. [Phong Material](https://dolphiniq.github.io/Ogar-Engine/examples/phongMaterial)
-3. [Thousands of point lights](https://dolphiniq.github.io/Ogar-Engine/examples/manyPointLights)
+3. [Thousands of Point Lights](https://dolphiniq.github.io/Ogar-Engine/examples/manyPointLights) (performance benchmarking example)
 4. [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
 
 ## How to run the examples locally:
