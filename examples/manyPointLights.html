@@ -21,13 +21,11 @@
 
         // UTILITY
         import Stats from './utils/stats.module.js';
-        import { GUI } from './utils/dat.gui.module.js';
+        import { GUI } from './utils/lil-gui.module.min.js';
 
         let engine, scene, camera, clock, delta, time;
         let orbitControls, stats, gui;
-        let textureLoader;
         let lightRotator;
-        let meshes = [];
 
         init();
 
@@ -66,110 +64,68 @@
             gui = new GUI();
             // gui.add(object, property, [min], [max], [step])
 
-            // Loaders
-            textureLoader = new OGAR.TextureLoader();
-
+            // Textures
+            const textureLoader = new OGAR.TextureLoader();
             const diffuseTexture = textureLoader.load('textures/ogar_hi.png');
             const normalMap = textureLoader.load('textures/normal_map.png');
 
+            // Meshes
             const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 ); // cubes
-            // const geometry = new OGAR.SphereBufferGeometry( 0.6, 32, 16 ); // spheres
             const material = new OGAR.DeferredMeshPhongMaterial({
                 shininess: 30,
                 map: diffuseTexture,
-                // normalMap: normalMap
+                normalMap: normalMap
             });
-
-            // setTimeout( () => {
-            //     material.normalMap = normalMap;
-            //     console.log( 'Updated normalMap to:', normalMap );
-            // }, 2000 );
-
             const ROWS = 15;
             const DISTANCE = 2;
             addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
-            // const mesh = new OGAR.Mesh( geometry, material ); // mesh for debugging
-            // console.log( 'Grid mesh:', mesh );
-            
-            const forwardRenderedMesh = new OGAR.Mesh(
-                new OGAR.SphereBufferGeometry( 1, 32, 16 ),
-                // new OGAR.MeshBasicMaterial({
-                new OGAR.MeshPhongMaterial({
-                    color: 0xdddddd,
 
-                    // transparent: true,
-                    // opacity: 0.6
-                })
-            );
-            console.log( 'forwardRenderedMesh:', forwardRenderedMesh );
-            scene.add( forwardRenderedMesh );
+            // Lights
+            const H_light = new OGAR.HemisphereLight( 0xff0000, 0x00ff00, 0.6 );
+            scene.add( H_light );
 
-            // Different sets of lighting for testing
-            const A_light = new OGAR.AmbientLight( 0xffffff, 0.3 );
-            const P_light = new OGAR.PointLight( 0xffffff, 20.0, 8 );
-            P_light.position.set( 3, 2, 0 );
-            const D_light = new OGAR.DirectionalLight( 0xffffff, 1 );
-            D_light.position.set( 3, 5, 0.2 );
-            const S_light = new OGAR.SpotLight( 0xffffff, 5 );
-            S_light.position.set( 3, 5, 3 );
-            const H_light = new OGAR.HemisphereLight( 0xff0000, 0x00ff00, 1 );
-            const H_light2 = new OGAR.HemisphereLight( 0x0000ff, 0x000044, 2 );
-
+            const NUM_OF_LIGHTS = 500;
+            const MAX_LIGHTS = 10000;
             const pointLightHelperGeometry = new OGAR.SphereBufferGeometry( 0.1, 6, 6 );
-            const pointLightHelper = new OGAR.Mesh(
+            const lightHelpers = new OGAR.InstancedMesh( 
                 pointLightHelperGeometry,
-                new OGAR.DeferredMeshPhongMaterial({ emissive: 0xffffff, color: 0x000000 })
+                new OGAR.MeshBasicMaterial({ color: 0xffffff }),
+                MAX_LIGHTS
             );
-            lightRotator = new OGAR.Object3D();
+            lightHelpers.count = 0; // Initialize to zero, increment after each added light
+            scene.add( lightHelpers );
 
-            // console.log( 'light:', H_light );
+            addPointLights( NUM_OF_LIGHTS );
 
-            P_light.add( pointLightHelper );
-            lightRotator.add( P_light );
-            // scene.add( lightRotator );
-            // scene.add( A_light );
-            // scene.add( D_light );
-            // scene.add( S_light );
-            // scene.add( H_light );
+            function addPointLights( count ) {
 
-            // function addHemi() {
-            //     console.log( 'Changed Hemi' );
-            //     if ( !H_light2.parent ) {
-            //         scene.add( H_light2 );
-            //     } else {
-            //         scene.remove( H_light2 );
-            //     }
-            // }
-            // setInterval( addHemi , 3000 );
+                const RANGE = [ 300, 2, 300 ];
+                for ( let i = 0 ; i < NUM_OF_LIGHTS; i++ ) {
+                    const color = Math.random() * 0x888888 + 0x888888;
+                    const light = new OGAR.PointLight( color, 12, 6, 2 );
+                    light.position.x = Math.random() * RANGE[ 0 ] - RANGE[ 0 ] / 2;
+                    light.position.y = Math.random() * RANGE[ 1 ] + 1;
+                    light.position.z = Math.random() * RANGE[ 2 ] - RANGE[ 2 ] / 2;
+                    light.matrixAutoUpdate = false;
+                    light.updateMatrix();
 
-            const RANGE = [ 30, 2, 30 ];
-            for ( let i = 0 ; i < 50; i++ ) {
-                const color = Math.random() * 0x888888 + 0x888888;
-                // const light = new OGAR.PointLight( color, 12, Math.random() * 3 + 4, 2 );
-                const light = new OGAR.PointLight( color, 12, 6, 2 );
-                light.position.x = Math.random() * RANGE[ 0 ] - RANGE[ 0 ] / 2;
-                light.position.y = Math.random() * RANGE[ 1 ] + 1;
-                light.position.z = Math.random() * RANGE[ 2 ] - RANGE[ 2 ] / 2;
-                light.matrixAutoUpdate = false;
-                light.updateMatrix();
+                    lightHelpers.setMatrixAt( lightHelpers.count, light.matrix );
+                    lightHelpers.setColorAt( lightHelpers.count, light.color );
+                    lightHelpers.count++;
 
-                const pointLightHelper = new OGAR.Mesh(
-                    pointLightHelperGeometry,
-                    new OGAR.DeferredMeshPhongMaterial({ emissive: color, color: 0x000000 })
-                );
-                light.add( pointLightHelper );
+                    scene.add( light );
+                }
 
-                // let obj = new OGAR.Object3D();
-                // obj.name = 'obj';
-                // scene.add( obj );
-                // obj.add( light );
-                // scene.add( obj );
-                scene.add( light );
-
-                // setTimeout( () => {
-                //     scene.remove( light );
-                // }, i * 100 + 1000 );
+                lightHelpers.instanceMatrix.needsUpdate = true;
+                lightHelpers.instanceColor.needsUpdate = true;
             }
+
+            // Debug
+            gui.add( 
+                { addLights: () => { addPointLights( NUM_OF_LIGHTS ) }}, 'addLights'
+            ).name('Add 500 point lights' );
+            gui.add({ f: () => { engine.visualizePointLightVolumes = !engine.visualizePointLightVolumes; } }, 'f' )
+                .name('Visualize point light volumes');
 
             window.addEventListener('resize', onWindowResize, false);
 
@@ -182,11 +138,7 @@
                     const mesh = new OGAR.Mesh( geometry, material );
                     mesh.position.x = distance * (j - (rows - 1) / 2);
                     mesh.position.z = distance * (i - (cols - 1) / 2);
-                    // mesh.matrixAutoUpdate = false;
-                    // mesh.updateMatrix();
-                    // mesh.matrixWorldNeedsUpdate = true;
                     scene.add( mesh );
-                    meshes.push( mesh );
                 }
             }
         }
@@ -197,13 +149,6 @@
             delta = clock.getDelta();
             time = clock.getElapsedTime();
             orbitControls.update();
-
-            lightRotator.rotation.y += 0.8 * delta;
-
-            // for ( const mesh of meshes ) {
-            //     mesh.rotation.x += 0.8 * delta;
-            //     mesh.rotation.z += 0.3 * delta;
-            // }
 
             engine.render( scene, camera );
 

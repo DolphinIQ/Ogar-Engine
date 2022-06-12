@@ -16,6 +16,7 @@ import { DeferredMeshPhongMaterial } from './materials/DeferredMeshPhongMaterial
 
 // GEOMETRIES
 import { FullScreenTriangleGeometry } from './geometries/FullScreenTriangleGeometry.js';
+import { PointLightHelperGeometry } from './geometries/PointLightHelperGeometry.js';
 
 // UTILITY
 import { WEBGL } from 'three/examples/jsm/WebGL.js';
@@ -31,6 +32,8 @@ Object.assign( OGAR, THREE );
 class Engine {
 
     #_renderer;
+    #_gl;
+    #_depthRenderBuffer;
     #_MRT;
     #_dynamicLightsRT;
     #_deferredShading;
@@ -40,6 +43,7 @@ class Engine {
     #_settings;
     #_visibleObjects;
     #_visualizePointLightVolumes;
+    #_pointLightHelpers;
     #_lights;
     #_lightScaleFactor;
     #_cameraPosition;
@@ -124,6 +128,12 @@ class Engine {
         this.#_renderer.outputEncoding = THREE.sRGBEncoding;
         this.#_renderer.physicallyCorrectLights = true;
         this.#_lightScaleFactor = ( this.#_renderer.physicallyCorrectLights !== true ) ? Math.PI : 1;
+        this.#_gl = this.#_renderer.getContext();
+
+        // this.#_renderer.autoClear = false;
+        // this.#_renderer.autoClearColor = false;
+        // this.#_renderer.autoClearDepth = false;
+        // this.#_renderer.autoClearStencil = false;
 
         this.#_renderer.info.autoReset = false;
 
@@ -140,7 +150,8 @@ class Engine {
             {
                 minFilter: THREE.NearestFilter,
                 magFilter: THREE.NearestFilter,
-                type: THREE.FloatType
+                type: THREE.FloatType,
+                depthBuffer: false
             }
         );
         this.#_RENDER_TARGETS.push( this.#_forwardRendering.RT );
@@ -176,9 +187,9 @@ class Engine {
 			this.#_MRT.texture[ i ].type = THREE.FloatType;
 		}
 
-        this.#_MRT.depthTexture = new THREE.DepthTexture();
-		this.#_MRT.depthTexture.format = THREE.DepthFormat;
-		this.#_MRT.depthTexture.type = THREE.UnsignedShortType;
+        // https://discourse.threejs.org/t/apply-depth-buffer-from-render-target-to-the-next-render/37276
+        const renderBufferProps = this.#_renderer.properties.get( this.#_MRT );
+        this.#_depthRenderBuffer = renderBufferProps.__webglDepthRenderbuffer || renderBufferProps.__webglDepthbuffer;
 
 		// Name our G-Buffer attachments for debugging
 		this.#_MRT.texture[ 0 ].name = 'position';
@@ -188,19 +199,16 @@ class Engine {
 
         this.#_RENDER_TARGETS.push( this.#_MRT );
 
-        console.log( 'this.#_MRT:', this.#_MRT );
-
         // PostProcessing full-screen triangle setup
         this.#_deferredShading = {};
 		this.#_deferredShading.scene = new THREE.Scene();
-        this.#_deferredShading.scene.autoUpdate = true
 		this.#_deferredShading.camera = new THREE.OrthographicCamera( -1, 1, 1, -1, 0, 1 );
         this.#_deferredShading.objects = [];
 
         let fragmentShader = finalRenderFragment;
         if ( this.#_settings.debugGbuffer ) {
             fragmentShader = fragmentShader.replace(
-                `finalColor = vec4( outgoingLight, 1.0 );`,
+                `finalColor = vec4( finalLight, 1.0 );`,
                 debug_fragment_output
             );
         }
@@ -228,7 +236,7 @@ class Engine {
                 dynamicLights: { value: this.#_dynamicLightsRT.texture },
                 ambientLight: { value: new THREE.Color() },
                 hemiLights: { value: [] },
-                directionalLights: { value: [] },
+                dirLights: { value: [] },
                 // Forward Render
                 forwardRender: { value: this.#_forwardRendering.RT.texture }
             },
@@ -241,14 +249,12 @@ class Engine {
             this.#_deferredShading.shader
         );
         this.#_deferredShading.fullScreenMesh.frustumCulled = false;
-        console.log( 'this.#_deferredShading.fullScreenMesh:', this.#_deferredShading.fullScreenMesh ); 
     }
 
     #_setupDynamicLights() {
 
         this.#_setupPointLights();
         // this.#_setupSpotLights(); TODO
-        // this.#_setupDirectionalLights(); TODO
 
     }
 
@@ -258,8 +264,11 @@ class Engine {
     #_setupPointLights() {
 
         // PointLight volume spheres
-        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 16, 8 );
-        const lightSphereGeometry = new THREE.SphereGeometry( 1, 8, 6 );
+        // Different levels of volume accuracy. 4th seems to cut off at boundries sometimes.
+        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 32, 16 ); // 1 max
+        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 16, 8 ); // 2
+        const lightSphereGeometry = new THREE.SphereGeometry( 1, 8, 6 ); // 3
+        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 6, 4 ); // 4 lowest
         const lightSphereInstancedGeometry = new THREE.InstancedBufferGeometry();
         const maxLights = 10000;
         lightSphereInstancedGeometry.instanceCount = 0;
@@ -287,11 +296,46 @@ class Engine {
             },
             side: THREE.BackSide,
             blending: THREE.AdditiveBlending,
-            depthWrite: false
+            depthWrite: false,
+            depthTest: false
         });
         this.lightVolumeSpheres = new THREE.Mesh( lightSphereInstancedGeometry, lightSphereMaterial );
         this.lightVolumeSpheres.frustumCulled = false;
         this.#_deferredShading.scene.add( this.lightVolumeSpheres );
+
+        this.#_setupPointLightHelpers();
+    }
+
+    #_setupPointLightHelpers() {
+
+        const lightSphereGeometry = new PointLightHelperGeometry( 25 );
+        const lightHelperInstancedGeometry = new THREE.InstancedBufferGeometry();
+        const maxLights = 10000;
+        lightHelperInstancedGeometry.instanceCount = 1;
+
+        lightHelperInstancedGeometry.attributes = lightSphereGeometry.attributes;
+
+        const transformAttribute = new THREE.InstancedBufferAttribute( new Float32Array( maxLights * 4 ), 4 );
+        lightHelperInstancedGeometry.setAttribute( 'transform', transformAttribute );
+        // transformAttribute.setUsage( THREE.DynamicDrawUsage );
+
+        const lightHelperMaterial = new THREE.LineBasicMaterial();
+        lightHelperMaterial.onBeforeCompile = ( program ) => {
+            program.vertexShader = `
+                in vec4 transform;
+            ` + program.vertexShader;
+            program.vertexShader = program.vertexShader.replace(
+                `#include <begin_vertex>`,
+                `
+                    vec3 transformed = vec3( position ) * transform.w;
+                    // vec3 transformed = vec3( position );
+                    transformed += transform.xyz;
+                `
+            );
+        }
+
+        this.#_pointLightHelpers = new THREE.Line( lightHelperInstancedGeometry, lightHelperMaterial );
+        this.#_pointLightHelpers.frustumCulled = false;
 
         this.#_visualizePointLightVolumes = false;
     }
@@ -302,9 +346,9 @@ class Engine {
     #_setupDebugger() {
 
         this.debugger = new Debugger();
-        // this.debugger.addLine( this.#_renderer.info.render, 'triangles', 'Triangles', false );
-        // this.debugger.addLine( this.#_renderer.info.render, 'calls', 'Draw Calls', false );
         this.debugger.addLine( this.#_renderer.info.render, 'triangles', 'Triangles' );
+        this.debugger.addLine( this.#_renderer.info.render, 'lines', 'Lines' );
+        this.debugger.addLine( this.#_renderer.info.render, 'points', 'Points' );
         this.debugger.addLine( this.#_renderer.info.render, 'calls', 'Draw Calls' );
         this.debugger.addLine( this.#_renderer.info.programs, 'length', 'Programs' );
         this.debugger.addLine( this.#_renderer.info.memory, 'geometries', 'Geometries' );
@@ -333,8 +377,6 @@ class Engine {
             renderTarget.setSize( window.innerWidth * dpr, window.innerHeight * dpr );
         }
 
-		// this.#_MRT.setSize( window.innerWidth * dpr, window.innerHeight * dpr );
-		// this.#_dynamicLightsRT.setSize( window.innerWidth * dpr, window.innerHeight * dpr );
         this.#_renderer.getSize( this.screenSize ).multiplyScalar( window.devicePixelRatio );
         this.lightVolumeSpheres.material.uniforms[ 'uScreenSize' ].value = this.screenSize;
     }
@@ -405,6 +447,14 @@ class Engine {
             pointLight.distance
         );
 
+        if ( this.#_visualizePointLightVolumes ) {
+            this.#_pointLightHelpers.geometry.getAttribute('transform').setXYZW(
+                this.#_lights.point.count,
+                this.vec3.x, this.vec3.y, this.vec3.z,
+                pointLight.distance
+            );
+        }
+
         this.color.copy( pointLight.color ).multiplyScalar( pointLight.intensity * this.#_lightScaleFactor ),
         this.#_lights.point.pointLightAttribute.setXYZW(
             this.#_lights.point.count,
@@ -432,7 +482,7 @@ class Engine {
         this.vec3.setFromMatrixPosition( directionalLight.target.matrixWorld );
         dirLightUniform.direction.sub( this.vec3 );
 
-        this.#_deferredShading.fullScreenMesh.material.uniforms.directionalLights.value.push( dirLightUniform );
+        this.#_deferredShading.fullScreenMesh.material.uniforms.dirLights.value.push( dirLightUniform );
     }
 
     #_updateObjects( scene, camera ) {
@@ -446,6 +496,7 @@ class Engine {
         this.#_lights.directional.count = 0;
         this.#_lights.hemi.count = 0;
         this.#_deferredShading.fullScreenMesh.material.uniforms.hemiLights.value = [];
+        this.#_deferredShading.fullScreenMesh.material.uniforms.dirLights.value = [];
 
         // artist-friendly light intensity scaling factor
         this.#_lightScaleFactor = ( this.#_renderer.physicallyCorrectLights !== true ) ? Math.PI : 1;
@@ -477,6 +528,12 @@ class Engine {
         this.lightVolumeSpheres.geometry.instanceCount = this.#_lights.point.count;
         this.#_lights.point.transformAttribute.needsUpdate = true;
         this.#_lights.point.pointLightAttribute.needsUpdate = true;
+
+        if ( this.#_visualizePointLightVolumes ) {
+            this.#_pointLightHelpers.geometry.instanceCount = this.#_lights.point.count;
+            this.#_pointLightHelpers.geometry.getAttribute('transform').needsUpdate = true;
+        }
+
         this.#_deferredShading.fullScreenMesh.material.uniforms.ambientLight.value = this.#_lights.ambient;
 
         // DEFINES (require shader recompilation)
@@ -484,9 +541,9 @@ class Engine {
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_HEMI_LIGHTS !== this.#_lights.hemi.count ||
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_DIR_LIGHTS !== this.#_lights.directional.count
         ) {
-            this.#_deferredShading.fullScreenMesh.material.needsUpdate = true;
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_HEMI_LIGHTS = this.#_lights.hemi.count;
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_DIR_LIGHTS = this.#_lights.directional.count;
+            this.#_deferredShading.fullScreenMesh.material.needsUpdate = true;
         }
     }
 
@@ -494,7 +551,7 @@ class Engine {
      * Forward rendering of any objects with no deferred material
      */
     #_renderForward( scene, camera ) {
-
+        // Show forward material meshes
         for( let i = 0, len = this.#_forwardRendering.objects.length; i < len; i++ ) {
 
             this.#_forwardRendering.objects[ i ].layers.set( 0 );
@@ -504,66 +561,35 @@ class Engine {
 
             this.#_deferredShading.objects[ i ].layers.set( this.invisibleLayer );
         }
+        // Add debugging objects
+        if ( this.#_visualizePointLightVolumes ) scene.add( this.#_pointLightHelpers );
 
+        // Assign forward RT and do depth buffer magic. We want to preserve the depth buffer for built-in Z-test.
+        // For more info: https://discourse.threejs.org/t/apply-depth-buffer-from-render-target-to-the-next-render/37276
+		this.#_renderer.setRenderTarget( this.#_forwardRendering.RT );
 
-        // Bread Fan code
-        const gl = this.#_renderer.getContext();
+        const renderBufferProps = this.#_renderer.properties.get( this.#_MRT );
+        this.#_depthRenderBuffer = renderBufferProps.__webglDepthRenderbuffer || renderBufferProps.__webglDepthbuffer;
 
-        // this.#_renderer.state.bindFramebuffer( gl.FRAMEBUFFER, null );
-        this.#_renderer.setRenderTarget( null );
+        if ( this.#_depthRenderBuffer ) 
+            this.#_gl.framebufferRenderbuffer( this.#_gl.FRAMEBUFFER, this.#_gl.DEPTH_ATTACHMENT, this.#_gl.RENDERBUFFER, this.#_depthRenderBuffer );
 
-        // const webglDepthTexture = this.#_renderer.properties.get( renderTarget.depthTexture ).__webglTexture;
-        // const webglDepthTexture = this.#_renderer.properties.get( this.#_MRT.depthTexture ).__webglTexture;
-        // console.log( 'webglDepthTexture:', webglDepthTexture );
-        // console.log( 'this.#_MRT.depthTexture:', this.#_MRT.depthTexture );
-        // document.body.append( this.#_MRT.depthTexture ); 
-        // gl.framebufferTexture2D( gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, webglDepthTexture, 0 );
+        this.#_renderer.autoClearDepth = false;
 
-
-        // or, blit
-
-
-        // const gBuffer = this.#_renderer.properties.get( renderTarget ).__webglFramebuffer;
-        // const gBuffer = this.#_renderer.properties.get( this.#_MRT.texture[ 0 ] ).__webglFramebuffer;
-
-        // console.log( 'gBuffer:', gBuffer );
-
-        // this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, this.#_MRT.texture[ 0 ] );
-        // this.#_renderer.state.bindFramebuffer( gl.WRITE_FRAMEBUFFER, null );
-        // gl.blitFramebuffer( 0, 0, this.#_MRT.width, this.#_MRT.height, 0, 0, this.#_MRT.width, this.#_MRT.height, gl.DEPTH_BUFFER_BIT, gl.NEAREST );
-        // this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, null );
-
-
-        // new blit
-
-        const gBuffer = this.#_renderer.properties.get( this.#_MRT ).__webglFramebuffer;
-        // console.log( 'gBuffer:', gBuffer );
-
-        this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, gBuffer );
-        this.#_renderer.state.bindFramebuffer( gl.WRITE_FRAMEBUFFER, null );
-        gl.blitFramebuffer( 0, 0, this.#_MRT.width, this.#_MRT.height, 0, 0, this.#_MRT.width, this.#_MRT.height, gl.DEPTH_BUFFER_BIT, gl.NEAREST );
-        this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, null );
-
-
-        // this.#_renderer.setRenderTarget( null );
-
-        // gl.bindFramebuffer( gl.READ_FRAMEBUFFER, gDeferredDrawer.FrameBuffer.Context );
-        // gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, null ); 
-        // gl.blitFramebuffer( 0, 0, gl.viewportWidth, gl.viewportHeight, 0, 0, gl.viewportWidth, gl.viewportHeight, gl.DEPTH_BUFFER_BIT, gl.NEAREST );
-        // gl.bindFramebuffer( gl.FRAMEBUFFER, null );
-
-
-
-
-		// this.#_renderer.setRenderTarget( null );
-		// this.#_renderer.setRenderTarget( this.#_forwardRendering.RT );
 		this.#_renderer.render( scene, camera );
+
+        this.#_renderer.autoClearDepth = true;
+
+        if ( this.#_depthRenderBuffer ) 
+            this.#_gl.framebufferRenderbuffer( this.#_gl.FRAMEBUFFER, this.#_gl.DEPTH_ATTACHMENT, this.#_gl.RENDERBUFFER, null );
 
         // Show deferred material meshes for next frame
         for( let i = 0, len = this.#_deferredShading.objects.length; i < len; i++ ) {
 
             this.#_deferredShading.objects[ i ].layers.set( 0 );
         }
+
+        if ( this.#_visualizePointLightVolumes ) scene.remove( this.#_pointLightHelpers );
     }
 
     render( scene, camera ) {
@@ -588,12 +614,17 @@ class Engine {
         // BREAD FAN - COMMENT OUT THE LINE ABOVE AND UNCOMMENT RENDER CODE BELOW TO SEE THE DEFERRED BOXES SCENE
 
         // Render dynamic lights optimized as volume spheres
-		// this.#_renderer.setRenderTarget( this.#_dynamicLightsRT );
-		// this.#_renderer.render( this.#_deferredShading.scene, camera );
+		this.#_renderer.setRenderTarget( this.#_dynamicLightsRT );
+		this.#_renderer.render( this.#_deferredShading.scene, camera );
 
         // Composite everything into the final image
-		// this.#_renderer.setRenderTarget( null );
-		// this.#_renderer.render( this.#_deferredShading.fullScreenMesh, camera );
+		this.#_renderer.setRenderTarget( null );
+
+        this.#_renderer.autoClear = false;
+
+		this.#_renderer.render( this.#_deferredShading.fullScreenMesh, camera );
+
+        this.#_renderer.autoClear = true;
 
     }
 
@@ -606,7 +637,6 @@ class Engine {
     }
     set visualizePointLightVolumes( bool ) {
         this.#_visualizePointLightVolumes = bool;
-        // TODO light volume helpers
     }
 }
 

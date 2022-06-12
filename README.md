@@ -19,7 +19,8 @@
 ## View the current examples:
 1. [Basic Scene](https://dolphiniq.github.io/Ogar-Engine/examples/basicScene)
 2. [Phong Material](https://dolphiniq.github.io/Ogar-Engine/examples/phongMaterial)
-3. [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
+3. [Thousands of point lights](https://dolphiniq.github.io/Ogar-Engine/examples/manyPointLights)
+4. [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
 
 ## How to run the examples locally:
 1. Fork the repository
@@ -37,7 +38,7 @@ npm run start
 4. Navigate to 'http://localhost:8080/' and select an example to run
 
 ## 📖 API and Usage so far:
-( For a full working example see `examples/basicScene.html` )
+( For a full working example see `examples/basicScene.html` or `examples/phongMaterial.html` )
 ```js
 import { OGAR } from './dist/OGAR.module.js';
 
@@ -55,13 +56,16 @@ const scene = new OGAR.Scene();
 const camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
 
 const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
-const material = new OGAR.GBufferMaterial({ // The only Phong-based supported material for now
+const material = new OGAR.DeferredMeshPhongMaterial({ // The only Phong-based supported material for now
     shininess: 25,
     map: diffuseTexture,
     normalMap: normalTexture
 });
 const mesh = new OGAR.Mesh( geometry, material );
-scene.add( mesh );
+
+const light = new OGAR.PointLight( 0xffffff, 10, 25, 2 ); // Make sure to add the 'distance' parameter
+light.position.set( 3, 5, 2 );
+scene.add( mesh, light );
 
 function animate() { // Inside your animation loop
     ...

@@ -21,7 +21,7 @@
 
         // UTILITY
         import Stats from './utils/stats.module.js';
-        import { GUI } from './utils/dat.gui.module.js';
+        import { GUI } from './utils/lil-gui.module.min.js';
 
         let engine, scene, camera;
         let orbitControls, stats, gui;
@@ -62,11 +62,11 @@
             // gui.add(object, property, [min], [max], [step])
 
             // Add lights to see the objects
-            const p1 = new OGAR.PointLight( 0xffffff, 1.2, 100, 2 );
-            const p2 = new OGAR.PointLight( 0xffffff, 1.6, 100, 2 );
+            const p1 = new OGAR.PointLight( 0xffffff, 2.0, 20, 2 );
+            const p2 = new OGAR.PointLight( 0xffffff, 2.5, 20, 2 );
             const a1 = new OGAR.AmbientLight( 0xffffff, 0.2 );
-            p1.position.set( 5, 15, 4 );
-            p2.position.set( -10, -2, 10 );
+            p1.position.set( 3, 10, 3 );
+            p2.position.set( -6, -1, 6 );
             scene.add( p1, p2, a1 );
 
             material = new OGAR.DeferredMeshPhongMaterial({
@@ -77,14 +77,15 @@
             // Init loaders
             ogarExporter = new OGAR.OGARExporter();
             ogarLoader = new OGAR.OGARLoader();
-
-            const exportMesh = { export: () => {
-                exportModel( model );
-            }};
-            gui.add( exportMesh,'export').name('Export Mesh');
+            
+            // Debug
+            gui.add({ f: () => { exportModel( model ) }}, 'f' ).name('Export Mesh');
+            gui.add({ f: () => { engine.visualizePointLightVolumes = !engine.visualizePointLightVolumes; } }, 'f' )
+                .name('Visualize point light volumes');
 
             loadModel();
-            
+
+            window.addEventListener('resize', onWindowResize, false);
             animate();
         }
 
@@ -114,6 +115,11 @@
 
             requestAnimationFrame( animate );
             stats.end();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
         }
 
     </script>

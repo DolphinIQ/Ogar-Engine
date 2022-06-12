@@ -40,6 +40,8 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
             glslVersion: GLSL3
         });
 
+		this.type = 'DeferredMeshPhongMaterial';
+
         // Default values fill
         this.#_map = options.map;
         this.#_emissiveMap = options.emissiveMap;

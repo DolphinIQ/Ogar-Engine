@@ -12775,7 +12775,7 @@ var lights_physical_fragment = "PhysicalMaterial material;\nmaterial.diffuseColo
 
 var lights_physical_pars_fragment = "struct PhysicalMaterial {\n\tvec3 diffuseColor;\n\tfloat roughness;\n\tvec3 specularColor;\n\tfloat specularF90;\n\t#ifdef USE_CLEARCOAT\n\t\tfloat clearcoat;\n\t\tfloat clearcoatRoughness;\n\t\tvec3 clearcoatF0;\n\t\tfloat clearcoatF90;\n\t#endif\n\t#ifdef USE_SHEEN\n\t\tvec3 sheenColor;\n\t\tfloat sheenRoughness;\n\t#endif\n};\nvec3 clearcoatSpecular = vec3( 0.0 );\nvec3 sheenSpecular = vec3( 0.0 );\nfloat IBLSheenBRDF( const in vec3 normal, const in vec3 viewDir, const in float roughness) {\n\tfloat dotNV = saturate( dot( normal, viewDir ) );\n\tfloat r2 = roughness * roughness;\n\tfloat a = roughness < 0.25 ? -339.2 * r2 + 161.4 * roughness - 25.9 : -8.48 * r2 + 14.3 * roughness - 9.95;\n\tfloat b = roughness < 0.25 ? 44.0 * r2 - 23.7 * roughness + 3.26 : 1.97 * r2 - 3.27 * roughness + 0.72;\n\tfloat DG = exp( a * dotNV + b ) + ( roughness < 0.25 ? 0.0 : 0.1 * ( roughness - 0.25 ) );\n\treturn saturate( DG * RECIPROCAL_PI );\n}\nvec2 DFGApprox( const in vec3 normal, const in vec3 viewDir, const in float roughness ) {\n\tfloat dotNV = saturate( dot( normal, viewDir ) );\n\tconst vec4 c0 = vec4( - 1, - 0.0275, - 0.572, 0.022 );\n\tconst vec4 c1 = vec4( 1, 0.0425, 1.04, - 0.04 );\n\tvec4 r = roughness * c0 + c1;\n\tfloat a004 = min( r.x * r.x, exp2( - 9.28 * dotNV ) ) * r.x + r.y;\n\tvec2 fab = vec2( - 1.04, 1.04 ) * a004 + r.zw;\n\treturn fab;\n}\nvec3 EnvironmentBRDF( const in vec3 normal, const in vec3 viewDir, const in vec3 specularColor, const in float specularF90, const in float roughness ) {\n\tvec2 fab = DFGApprox( normal, viewDir, roughness );\n\treturn specularColor * fab.x + specularF90 * fab.y;\n}\nvoid computeMultiscattering( const in vec3 normal, const in vec3 viewDir, const in vec3 specularColor, const in float specularF90, const in float roughness, inout vec3 singleScatter, inout vec3 multiScatter ) {\n\tvec2 fab = DFGApprox( normal, viewDir, roughness );\n\tvec3 FssEss = specularColor * fab.x + specularF90 * fab.y;\n\tfloat Ess = fab.x + fab.y;\n\tfloat Ems = 1.0 - Ess;\n\tvec3 Favg = specularColor + ( 1.0 - specularColor ) * 0.047619;\tvec3 Fms = FssEss * Favg / ( 1.0 - Ems * Favg );\n\tsingleScatter += FssEss;\n\tmultiScatter += Fms * Ems;\n}\n#if NUM_RECT_AREA_LIGHTS > 0\n\tvoid RE_Direct_RectArea_Physical( const in RectAreaLight rectAreaLight, const in GeometricContext geometry, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {\n\t\tvec3 normal = geometry.normal;\n\t\tvec3 viewDir = geometry.viewDir;\n\t\tvec3 position = geometry.position;\n\t\tvec3 lightPos = rectAreaLight.position;\n\t\tvec3 halfWidth = rectAreaLight.halfWidth;\n\t\tvec3 halfHeight = rectAreaLight.halfHeight;\n\t\tvec3 lightColor = rectAreaLight.color;\n\t\tfloat roughness = material.roughness;\n\t\tvec3 rectCoords[ 4 ];\n\t\trectCoords[ 0 ] = lightPos + halfWidth - halfHeight;\t\trectCoords[ 1 ] = lightPos - halfWidth - halfHeight;\n\t\trectCoords[ 2 ] = lightPos - halfWidth + halfHeight;\n\t\trectCoords[ 3 ] = lightPos + halfWidth + halfHeight;\n\t\tvec2 uv = LTC_Uv( normal, viewDir, roughness );\n\t\tvec4 t1 = texture2D( ltc_1, uv );\n\t\tvec4 t2 = texture2D( ltc_2, uv );\n\t\tmat3 mInv = mat3(\n\t\t\tvec3( t1.x, 0, t1.y ),\n\t\t\tvec3(    0, 1,    0 ),\n\t\t\tvec3( t1.z, 0, t1.w )\n\t\t);\n\t\tvec3 fresnel = ( material.specularColor * t2.x + ( vec3( 1.0 ) - material.specularColor ) * t2.y );\n\t\treflectedLight.directSpecular += lightColor * fresnel * LTC_Evaluate( normal, viewDir, position, mInv, rectCoords );\n\t\treflectedLight.directDiffuse += lightColor * material.diffuseColor * LTC_Evaluate( normal, viewDir, position, mat3( 1.0 ), rectCoords );\n\t}\n#endif\nvoid RE_Direct_Physical( const in IncidentLight directLight, const in GeometricContext geometry, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {\n\tfloat dotNL = saturate( dot( geometry.normal, directLight.direction ) );\n\tvec3 irradiance = dotNL * directLight.color;\n\t#ifdef USE_CLEARCOAT\n\t\tfloat dotNLcc = saturate( dot( geometry.clearcoatNormal, directLight.direction ) );\n\t\tvec3 ccIrradiance = dotNLcc * directLight.color;\n\t\tclearcoatSpecular += ccIrradiance * BRDF_GGX( directLight.direction, geometry.viewDir, geometry.clearcoatNormal, material.clearcoatF0, material.clearcoatF90, material.clearcoatRoughness );\n\t#endif\n\t#ifdef USE_SHEEN\n\t\tsheenSpecular += irradiance * BRDF_Sheen( directLight.direction, geometry.viewDir, geometry.normal, material.sheenColor, material.sheenRoughness );\n\t#endif\n\treflectedLight.directSpecular += irradiance * BRDF_GGX( directLight.direction, geometry.viewDir, geometry.normal, material.specularColor, material.specularF90, material.roughness );\n\treflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );\n}\nvoid RE_IndirectDiffuse_Physical( const in vec3 irradiance, const in GeometricContext geometry, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {\n\treflectedLight.indirectDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );\n}\nvoid RE_IndirectSpecular_Physical( const in vec3 radiance, const in vec3 irradiance, const in vec3 clearcoatRadiance, const in GeometricContext geometry, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {\n\t#ifdef USE_CLEARCOAT\n\t\tclearcoatSpecular += clearcoatRadiance * EnvironmentBRDF( geometry.clearcoatNormal, geometry.viewDir, material.clearcoatF0, material.clearcoatF90, material.clearcoatRoughness );\n\t#endif\n\t#ifdef USE_SHEEN\n\t\tsheenSpecular += irradiance * material.sheenColor * IBLSheenBRDF( geometry.normal, geometry.viewDir, material.sheenRoughness );\n\t#endif\n\tvec3 singleScattering = vec3( 0.0 );\n\tvec3 multiScattering = vec3( 0.0 );\n\tvec3 cosineWeightedIrradiance = irradiance * RECIPROCAL_PI;\n\tcomputeMultiscattering( geometry.normal, geometry.viewDir, material.specularColor, material.specularF90, material.roughness, singleScattering, multiScattering );\n\tvec3 diffuse = material.diffuseColor * ( 1.0 - ( singleScattering + multiScattering ) );\n\treflectedLight.indirectSpecular += radiance * singleScattering;\n\treflectedLight.indirectSpecular += multiScattering * cosineWeightedIrradiance;\n\treflectedLight.indirectDiffuse += diffuse * cosineWeightedIrradiance;\n}\n#define RE_Direct\t\t\t\tRE_Direct_Physical\n#define RE_Direct_RectArea\t\tRE_Direct_RectArea_Physical\n#define RE_IndirectDiffuse\t\tRE_IndirectDiffuse_Physical\n#define RE_IndirectSpecular\t\tRE_IndirectSpecular_Physical\nfloat computeSpecularOcclusion( const in float dotNV, const in float ambientOcclusion, const in float roughness ) {\n\treturn saturate( pow( dotNV + ambientOcclusion, exp2( - 16.0 * roughness - 1.0 ) ) - 1.0 + ambientOcclusion );\n}";
 
-var lights_fragment_begin = "\nGeometricContext geometry;\ngeometry.position = - vViewPosition;\ngeometry.normal = normal;\ngeometry.viewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );\n#ifdef USE_CLEARCOAT\n\tgeometry.clearcoatNormal = clearcoatNormal;\n#endif\nIncidentLight directLight;\n#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )\n\tPointLight pointLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_POINT_LIGHT_SHADOWS > 0\n\tPointLightShadow pointLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_POINT_LIGHTS; i ++ ) {\n\t\tpointLight = pointLights[ i ];\n\t\tgetPointLightInfo( pointLight, geometry, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_POINT_LIGHT_SHADOWS )\n\t\tpointLightShadow = pointLightShadows[ i ];\n\t\tdirectLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getPointShadow( pointShadowMap[ i ], pointLightShadow.shadowMapSize, pointLightShadow.shadowBias, pointLightShadow.shadowRadius, vPointShadowCoord[ i ], pointLightShadow.shadowCameraNear, pointLightShadow.shadowCameraFar ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )\n\tSpotLight spotLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_SPOT_LIGHT_SHADOWS > 0\n\tSpotLightShadow spotLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_SPOT_LIGHTS; i ++ ) {\n\t\tspotLight = spotLights[ i ];\n\t\tgetSpotLightInfo( spotLight, geometry, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS )\n\t\tspotLightShadow = spotLightShadows[ i ];\n\t\tdirectLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( spotShadowMap[ i ], spotLightShadow.shadowMapSize, spotLightShadow.shadowBias, spotLightShadow.shadowRadius, vSpotShadowCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )\n\tDirectionalLight directionalLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0\n\tDirectionalLightShadow directionalLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_DIR_LIGHTS; i ++ ) {\n\t\tdirectionalLight = directionalLights[ i ];\n\t\tgetDirectionalLightInfo( directionalLight, geometry, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS )\n\t\tdirectionalLightShadow = directionalLightShadows[ i ];\n\t\tdirectLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_RECT_AREA_LIGHTS > 0 ) && defined( RE_Direct_RectArea )\n\tRectAreaLight rectAreaLight;\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_RECT_AREA_LIGHTS; i ++ ) {\n\t\trectAreaLight = rectAreaLights[ i ];\n\t\tRE_Direct_RectArea( rectAreaLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if defined( RE_IndirectDiffuse )\n\tvec3 iblIrradiance = vec3( 0.0 );\n\tvec3 irradiance = getAmbientLightIrradiance( ambientLightColor );\n\tirradiance += getLightProbeIrradiance( lightProbe, geometry.normal );\n\t#if ( NUM_HEMI_LIGHTS > 0 )\n\t\t#pragma unroll_loop_start\n\t\tfor ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) {\n\t\t\tirradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometry.normal );\n\t\t}\n\t\t#pragma unroll_loop_end\n\t#endif\n#endif\n#if defined( RE_IndirectSpecular )\n\tvec3 radiance = vec3( 0.0 );\n\tvec3 clearcoatRadiance = vec3( 0.0 );\n#endif";
+var lights_fragment_begin$1 = "\nGeometricContext geometry;\ngeometry.position = - vViewPosition;\ngeometry.normal = normal;\ngeometry.viewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );\n#ifdef USE_CLEARCOAT\n\tgeometry.clearcoatNormal = clearcoatNormal;\n#endif\nIncidentLight directLight;\n#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )\n\tPointLight pointLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_POINT_LIGHT_SHADOWS > 0\n\tPointLightShadow pointLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_POINT_LIGHTS; i ++ ) {\n\t\tpointLight = pointLights[ i ];\n\t\tgetPointLightInfo( pointLight, geometry, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_POINT_LIGHT_SHADOWS )\n\t\tpointLightShadow = pointLightShadows[ i ];\n\t\tdirectLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getPointShadow( pointShadowMap[ i ], pointLightShadow.shadowMapSize, pointLightShadow.shadowBias, pointLightShadow.shadowRadius, vPointShadowCoord[ i ], pointLightShadow.shadowCameraNear, pointLightShadow.shadowCameraFar ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )\n\tSpotLight spotLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_SPOT_LIGHT_SHADOWS > 0\n\tSpotLightShadow spotLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_SPOT_LIGHTS; i ++ ) {\n\t\tspotLight = spotLights[ i ];\n\t\tgetSpotLightInfo( spotLight, geometry, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_SPOT_LIGHT_SHADOWS )\n\t\tspotLightShadow = spotLightShadows[ i ];\n\t\tdirectLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( spotShadowMap[ i ], spotLightShadow.shadowMapSize, spotLightShadow.shadowBias, spotLightShadow.shadowRadius, vSpotShadowCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )\n\tDirectionalLight directionalLight;\n\t#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0\n\tDirectionalLightShadow directionalLightShadow;\n\t#endif\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_DIR_LIGHTS; i ++ ) {\n\t\tdirectionalLight = directionalLights[ i ];\n\t\tgetDirectionalLightInfo( directionalLight, geometry, directLight );\n\t\t#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS )\n\t\tdirectionalLightShadow = directionalLightShadows[ i ];\n\t\tdirectLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;\n\t\t#endif\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if ( NUM_RECT_AREA_LIGHTS > 0 ) && defined( RE_Direct_RectArea )\n\tRectAreaLight rectAreaLight;\n\t#pragma unroll_loop_start\n\tfor ( int i = 0; i < NUM_RECT_AREA_LIGHTS; i ++ ) {\n\t\trectAreaLight = rectAreaLights[ i ];\n\t\tRE_Direct_RectArea( rectAreaLight, geometry, material, reflectedLight );\n\t}\n\t#pragma unroll_loop_end\n#endif\n#if defined( RE_IndirectDiffuse )\n\tvec3 iblIrradiance = vec3( 0.0 );\n\tvec3 irradiance = getAmbientLightIrradiance( ambientLightColor );\n\tirradiance += getLightProbeIrradiance( lightProbe, geometry.normal );\n\t#if ( NUM_HEMI_LIGHTS > 0 )\n\t\t#pragma unroll_loop_start\n\t\tfor ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) {\n\t\t\tirradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometry.normal );\n\t\t}\n\t\t#pragma unroll_loop_end\n\t#endif\n#endif\n#if defined( RE_IndirectSpecular )\n\tvec3 radiance = vec3( 0.0 );\n\tvec3 clearcoatRadiance = vec3( 0.0 );\n#endif";
 
 var lights_fragment_maps = "#if defined( RE_IndirectDiffuse )\n\t#ifdef USE_LIGHTMAP\n\t\tvec4 lightMapTexel = texture2D( lightMap, vUv2 );\n\t\tvec3 lightMapIrradiance = lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;\n\t\t#ifndef PHYSICALLY_CORRECT_LIGHTS\n\t\t\tlightMapIrradiance *= PI;\n\t\t#endif\n\t\tirradiance += lightMapIrradiance;\n\t#endif\n\t#if defined( USE_ENVMAP ) && defined( STANDARD ) && defined( ENVMAP_TYPE_CUBE_UV )\n\t\tiblIrradiance += getIBLIrradiance( geometry.normal );\n\t#endif\n#endif\n#if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )\n\tradiance += getIBLRadiance( geometry.viewDir, geometry.normal, material.roughness );\n\t#ifdef USE_CLEARCOAT\n\t\tclearcoatRadiance += getIBLRadiance( geometry.viewDir, geometry.clearcoatNormal, material.clearcoatRoughness );\n\t#endif\n#endif";
 
@@ -12996,7 +12996,7 @@ const ShaderChunk = {
 	lights_phong_pars_fragment: lights_phong_pars_fragment$1,
 	lights_physical_fragment: lights_physical_fragment,
 	lights_physical_pars_fragment: lights_physical_pars_fragment,
-	lights_fragment_begin: lights_fragment_begin,
+	lights_fragment_begin: lights_fragment_begin$1,
 	lights_fragment_maps: lights_fragment_maps,
 	lights_fragment_end: lights_fragment_end,
 	logdepthbuf_fragment: logdepthbuf_fragment,
@@ -50896,6 +50896,98 @@ class OGARLoader {
     }
 }
 
+var lights_fragment_begin = /* glsl */`
+/**
+ * This is a template that can be used to light a material, it uses pluggable
+ * RenderEquations (RE)for specific lighting scenarios.
+ *
+ * Instructions for use:
+ * - Ensure that both RE_Direct, RE_IndirectDiffuse and RE_IndirectSpecular are defined
+ * - If you have defined an RE_IndirectSpecular, you need to also provide a Material_LightProbeLOD. <---- ???
+ * - Create a material parameter that is to be passed as the third parameter to your lighting functions.
+ *
+ * TODO:
+ * - Add area light support.
+ * - Add sphere light support.
+ * - Add diffuse light probe (irradiance cubemap) support.
+ */
+
+GeometricContext geometry;
+
+// geometry.position = - vViewPosition;
+// geometry.normal = normalize( (viewMatrix * vec4( normal, 0.0 )).xyz );
+// geometry.viewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );
+// geometry.viewDir = normalize( vViewPosition );
+
+geometry.position = position;
+geometry.normal = normalize( normal );
+geometry.viewDir = normalize( cameraPosition - position );
+
+IncidentLight directLight;
+
+#if ( NR_OF_DIR_LIGHTS > 0 ) && defined( RE_Direct )
+
+	DirectionalLight directionalLight;
+	#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+		DirectionalLightShadow directionalLightShadow;
+	#endif
+
+	#pragma unroll_loop_start
+	for ( int i = 0; i < NR_OF_DIR_LIGHTS; i ++ ) {
+
+		// directionalLight = directionalLights[ i ];
+		directionalLight = dirLights[ i ];
+
+		getDirectionalLightInfo( directionalLight, geometry, directLight );
+
+		#if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS )
+		directionalLightShadow = directionalLightShadows[ i ];
+		directLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
+		#endif
+
+		RE_Direct( directLight, geometry, material, reflectedLight );
+
+	}
+	#pragma unroll_loop_end
+#endif
+
+#if defined( RE_IndirectDiffuse )
+
+	vec3 iblIrradiance = vec3( 0.0 );
+	// vec3 irradiance = getAmbientLightIrradiance( ambientLightColor );
+	vec3 irradiance = getAmbientLightIrradiance( ambientLight );
+	// vec3 irradiance = ambientLight;
+	irradiance += getLightProbeIrradiance( lightProbe, geometry.normal );
+
+	#if ( NUM_HEMI_LIGHTS > 0 )
+
+		#pragma unroll_loop_start
+		for ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) {
+
+			irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometry.normal );
+
+		}
+		#pragma unroll_loop_end
+	#endif
+
+	#if ( NR_OF_HEMI_LIGHTS > 0 )
+
+		#pragma unroll_loop_start
+		for ( int i = 0; i < NR_OF_HEMI_LIGHTS; i ++ ) {
+
+			irradiance += getHemisphereLightIrradiance( hemiLights[ i ], geometry.normal );
+		}
+		#pragma unroll_loop_end
+
+	#endif
+#endif
+
+#if defined( RE_IndirectSpecular )
+	vec3 radiance = vec3( 0.0 );
+	vec3 clearcoatRadiance = vec3( 0.0 );
+#endif
+`;
+
 var lights_phong_pars_fragment = /* glsl */`
 // varying vec3 vViewPosition;
 
@@ -50922,44 +51014,7 @@ void RE_IndirectDiffuse_BlinnPhong( const in vec3 irradiance, const in Geometric
 #define Material_LightProbeLOD( material )	(0)
 `;
 
-var debug_fragment_output = /*glsl*/`
-
-if( uv.x < 0.5 ) { // left side
-    if( uv.y > 0.5 ) { // top
-        finalColor = vec4( position, 1.0 );
-    } else { // bottom
-        finalColor = vec4( vec3( depth ), 1.0 );
-        // finalColor = vec4( outgoingLight, 1.0 );
-        
-        // finalColor = vec4( directionalLights[ 0 ].color, 1.0 );
-        // finalColor = vec4( directionalLights[ 0 ].direction, 1.0 );
-
-        // if ( directionalLights[ 0 ].color.r == 0.0 ) finalColor.r = 1.0;
-        // if ( directionalLights[ 0 ].color.g == 0.0 ) finalColor.g = 1.0;
-        // if ( directionalLights[ 0 ].color.b == 0.0 ) finalColor.b = 1.0;
-        // if ( directionalLights[ 0 ].direction.r == 0.0 ) finalColor.r = 1.0;
-        // if ( directionalLights[ 0 ].direction.g == 0.0 ) finalColor.g = 1.0;
-        // if ( directionalLights[ 0 ].direction.b == 0.0 ) finalColor.b = 1.0;
-    }
-} else { // right side
-    if( uv.y > 0.5 ) { // top
-        finalColor = vec4( normal, 1.0 );
-    } else { // bottom
-        finalColor = vec4( diffuseColor, 1.0 );
-    }
-}
-`;
-
 const finalRenderVertex = /*glsl*/`
-    // #version 300 es
-    // precision highp float;
-
-    // in vec3 position;
-    // in vec2 uv;
-
-    // uniform mat4 modelViewMatrix;
-    // uniform mat4 projectionMatrix;
-    // uniform mat3 normalMatrix;
 
     out vec2 vUv;
 
@@ -50970,18 +51025,9 @@ const finalRenderVertex = /*glsl*/`
 `;
 
 const finalRenderFragment = /*glsl*/`
-    // #version 300 es
-    // precision highp float;
-    // #define PHONG
 
     in vec2 vUv;
 
-    // struct HemisphereLight {
-	// 	vec3 direction;
-	// 	vec3 skyColor;
-	// 	vec3 groundColor;
-	// };
-    
     // Built-in three.js uniforms
     // uniform mat4 modelMatrix; // = object.matrixWorld
     // uniform mat4 modelViewMatrix; // = camera.matrixWorldInverse * object.matrixWorld
@@ -51108,7 +51154,8 @@ const finalRenderFragment = /*glsl*/`
         };
 
         // uniform DirectionalLight directionalLights[ NUM_DIR_LIGHTS ];
-        uniform DirectionalLight directionalLights[ NR_OF_DIR_LIGHTS ];
+        // uniform DirectionalLight directionalLights[ NR_OF_DIR_LIGHTS ];
+        uniform DirectionalLight dirLights[ NR_OF_DIR_LIGHTS ];
 
         void getDirectionalLightInfo( const in DirectionalLight directionalLight, const in GeometricContext geometry, out IncidentLight light ) {
 
@@ -51185,12 +51232,13 @@ const finalRenderFragment = /*glsl*/`
         vec3 emissiveColor = texture( gEmissive, uv ).rgb;
         float shininess = texture( gEmissive, uv ).a;
         vec3 specular = vec3( texture( gNormal, uv ).a );
+        vec4 forwardColor = texture( forwardRender, uv );
+        vec4 dynamicLightsColor = texture( dynamicLights, uv );
 
         vec4 mvPosition = viewMatrix * vec4( position, 1.0 );
         vec3 vViewPosition = - mvPosition.xyz;
 
 	    ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
-        // TODO: vec3 totalEmissiveRadiance = emissive;
 
         // Accumulation
         // #include <lights_phong_fragment> : edited start
@@ -51201,286 +51249,40 @@ const finalRenderFragment = /*glsl*/`
         material.specularStrength = 1.0;
         // #include <lights_phong_fragment> : edited end
 
-        // #include <lights_fragment_begin> : edited start
-        GeometricContext geometry;
-
-        // geometry.position = - vViewPosition;
-        // geometry.normal = normalize( (viewMatrix * vec4( normal, 0.0 )).xyz );
-        // geometry.viewDir = ( isOrthographic ) ? vec3( 0, 0, 1 ) : normalize( vViewPosition );
-        // geometry.viewDir = normalize( vViewPosition );
-
-        geometry.position = position;
-        geometry.normal = normalize( normal );
-        geometry.viewDir = normalize( cameraPosition - position );
-
-        IncidentLight directLight;
-
-        #if ( NR_OF_DIR_LIGHTS > 0 ) && defined( RE_Direct )
-
-            DirectionalLight directionalLight;
-            #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
-                DirectionalLightShadow directionalLightShadow;
-            #endif
-
-            #pragma unroll_loop_start
-            for ( int i = 0; i < NR_OF_DIR_LIGHTS; i ++ ) {
-
-                directionalLight = directionalLights[ i ];
-
-                getDirectionalLightInfo( directionalLight, geometry, directLight );
-
-                #if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS )
-                directionalLightShadow = directionalLightShadows[ i ];
-                directLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
-                #endif
-
-                RE_Direct( directLight, geometry, material, reflectedLight );
-
-            }
-            #pragma unroll_loop_end
-        #endif
-
-        #if defined( RE_IndirectDiffuse )
-
-            vec3 iblIrradiance = vec3( 0.0 );
-            // vec3 irradiance = getAmbientLightIrradiance( ambientLightColor );
-            vec3 irradiance = getAmbientLightIrradiance( ambientLight );
-            // vec3 irradiance = ambientLight;
-            irradiance += getLightProbeIrradiance( lightProbe, geometry.normal );
-
-            #if ( NUM_HEMI_LIGHTS > 0 )
-
-                #pragma unroll_loop_start
-                for ( int i = 0; i < NUM_HEMI_LIGHTS; i ++ ) {
-
-                    irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometry.normal );
-
-                }
-                #pragma unroll_loop_end
-            #endif
-
-            #if ( NR_OF_HEMI_LIGHTS > 0 )
-
-                #pragma unroll_loop_start
-                for ( int i = 0; i < NR_OF_HEMI_LIGHTS; i ++ ) {
-
-                    irradiance += getHemisphereLightIrradiance( hemiLights[ i ], geometry.normal );
-                }
-                #pragma unroll_loop_end
-
-            #endif
-        #endif
-
-        #if defined( RE_IndirectSpecular )
-            vec3 radiance = vec3( 0.0 );
-            vec3 clearcoatRadiance = vec3( 0.0 );
-        #endif
-        // #include <lights_fragment_begin> : edited end
+        ${ lights_fragment_begin }
 
         #include <lights_fragment_end>
 
         vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + 
             reflectedLight.directSpecular + reflectedLight.indirectSpecular + emissiveColor;
-        // vec3 outgoingLight = reflectedLight.indirectDiffuse;
 
-        outgoingLight += texture( dynamicLights, uv ).xyz;
+        outgoingLight += dynamicLightsColor.xyz;
+        outgoingLight = clamp( outgoingLight, 0.0, 1.0 );
 
-        finalColor = vec4( outgoingLight, 1.0 );
-        // finalColor = vec4( normal, 1.0 );
-        // finalColor = vec4( ambientLight, 1.0 );
-        // finalColor = texture( dynamicLights, uv );
-        // finalColor = texture( forwardRender, uv );
+        vec3 finalLight = mix( outgoingLight, forwardColor.xyz, forwardColor.a );
+
+        finalColor = vec4( finalLight, 1.0 );
     }
 `;
 
+var debug_fragment_output = /*glsl*/`
+
+if( uv.x < 0.5 ) { // left side
+    if( uv.y > 0.5 ) { // Left top
+        finalColor = vec4( position, 1.0 );
+    } else { // Left bottom
+        finalColor = vec4( vec3( depth ), 1.0 );
+    }
+} else { // right side
+    if( uv.y > 0.5 ) { // Right top
+        finalColor = vec4( normal, 1.0 );
+    } else { // Right bottom
+        finalColor = vec4( diffuseColor, 1.0 );
+    }
+}
+`;
+
 const lightSphereShader = {
-    vertex: /*glsl*/`#version 300 es
-        precision highp float;
-
-        in vec3 position;
-
-        uniform mat4 viewMatrix; // = camera.matrixWorldInverse
-        uniform mat4 modelMatrix;
-        uniform mat4 modelViewMatrix;
-        uniform mat4 projectionMatrix;
-
-        void main() {
-            gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-            // // mat4 modelViewMatrix = viewMatrix * vec4( worldPosition, 1.0 );
-            // vec4 modelViewPosition = viewMatrix * vec4( worldPosition, 1.0 );
-            // gl_Position = projectionMatrix * modelViewPosition * vec4( position, 1.0 );
-        }
-    `,
-    fragment: /*glsl*/`#version 300 es
-        precision highp float;
-        
-        // Built-in three.js uniforms
-        uniform mat4 modelMatrix; // = object.matrixWorld
-        // uniform mat4 modelViewMatrix; // = camera.matrixWorldInverse * object.matrixWorld
-        // uniform mat4 projectionMatrix; // = camera.projectionMatrix
-        // uniform mat3 normalMatrix; // = inverse transpose of modelViewMatrix
-
-        uniform mat4 viewMatrix; // = camera.matrixWorldInverse
-        // uniform vec3 cameraPosition; // = camera position in world space
-
-        uniform vec2 uScreenSize;
-        uniform sampler2D gPosition;
-        uniform sampler2D gNormal;
-        uniform sampler2D gDiffuse;
-        uniform sampler2D gEmissive;
-        
-        layout(location = 0) out vec4 finalColor;
-
-        
-        #include <common>
-        #include <packing>
-
-        // #include <dithering_pars_fragment>
-        // #include <color_pars_fragment>
-        // #include <uv_pars_fragment>
-        // #include <uv2_pars_fragment>
-        // #include <map_pars_fragment>
-        // #include <alphamap_pars_fragment>
-        // #include <alphatest_pars_fragment>
-        // #include <aomap_pars_fragment>
-        // #include <lightmap_pars_fragment>
-        // #include <emissivemap_pars_fragment>
-        // #include <envmap_common_pars_fragment>
-        // #include <envmap_pars_fragment>
-        // #include <cube_uv_reflection_fragment>
-        // #include <fog_pars_fragment>
-
-        #include <bsdfs>
-        // #include <lights_pars_begin> : edited start
-        float getDistanceAttenuation( const in float lightDistance, const in float cutoffDistance, const in float decayExponent ) {
-
-            #if defined ( PHYSICALLY_CORRECT_LIGHTS )
-                // based upon Frostbite 3 Moving to Physically-based Rendering
-                // page 32, equation 26: E[window1]
-                // https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf
-                float distanceFalloff = 1.0 / max( pow( lightDistance, decayExponent ), 0.01 );
-
-                if ( cutoffDistance > 0.0 ) {
-                    distanceFalloff *= pow2( saturate( 1.0 - pow4( lightDistance / cutoffDistance ) ) );
-                }
-                return distanceFalloff;
-            #else
-                if ( cutoffDistance > 0.0 && decayExponent > 0.0 ) {
-                    return pow( saturate( - lightDistance / cutoffDistance + 1.0 ), decayExponent );
-                }
-                return 1.0;
-            #endif
-        }
-
-        struct PointLight {
-            vec3 position;
-            vec3 color;
-            float distance;
-            float decay;
-        };
-        // light is an out parameter as having it as a return value caused compiler errors on some devices
-        void getPointLightInfo( const in PointLight pointLight, const in GeometricContext geometry, out IncidentLight light ) {
-
-            vec3 lVector = pointLight.position - geometry.position;
-
-            light.direction = normalize( lVector );
-
-            float lightDistance = length( lVector );
-
-            light.color = pointLight.color;
-            light.color *= getDistanceAttenuation( lightDistance, pointLight.distance, pointLight.decay );
-            light.visible = ( light.color != vec3( 0.0 ) );
-
-        }
-        // #include <lights_pars_begin> : edited end
-
-        // #include <normal_pars_fragment>
-
-        ${ lights_phong_pars_fragment }
-
-        // #include <shadowmap_pars_fragment>
-        // #include <bumpmap_pars_fragment>
-        // #include <normalmap_pars_fragment>
-        // #include <specularmap_pars_fragment>
-        // #include <logdepthbuf_pars_fragment>
-        // #include <clipping_planes_pars_fragment>
-
-        // The single PointLight for each sphere
-        uniform PointLight pointLight;
-
-        vec2 CalcTexCoord() {
-            return gl_FragCoord.xy / uScreenSize;
-        }
-
-        void main() {
-
-            // G-Buffer data
-            vec2 uv = CalcTexCoord();
-            vec3 position = texture( gPosition, uv ).xyz;
-            float depth = texture( gPosition, uv ).a;
-            vec3 normal = normalize( texture( gNormal, uv ).xyz );
-            vec3 diffuseColor = texture( gDiffuse, uv ).rgb;
-            vec3 emissiveColor = texture( gEmissive, uv ).rgb;
-            float shininess = texture( gEmissive, uv ).a;
-            vec3 specular = vec3( texture( gNormal, uv ).a );
-
-            vec4 mvPosition = viewMatrix * vec4( position, 1.0 );
-            vec3 vViewPosition = - mvPosition.xyz;
-
-            ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
-            // TODO: vec3 totalEmissiveRadiance = emissive;
-
-            // Accumulation
-            // #include <lights_phong_fragment> : edited start
-            BlinnPhongMaterial material;
-            material.diffuseColor = diffuseColor.rgb;
-            material.specularColor = specular;
-            material.specularShininess = shininess;
-            material.specularStrength = 1.0;
-            // #include <lights_phong_fragment> : edited end
-
-            // #include <lights_fragment_begin> : edited start
-            GeometricContext geometry;
-            geometry.position = - vViewPosition;
-            geometry.normal = normalize( (viewMatrix * vec4( normal, 0.0 )).xyz );
-            geometry.viewDir = normalize( vViewPosition );
-
-            IncidentLight directLight;
-
-            vec3 worldPosition = vec3( modelMatrix[0][3], modelMatrix[1][3], modelMatrix[2][3] );
-            worldPosition = (viewMatrix * vec4( worldPosition, 1.0 )).xyz;
-
-            PointLight newPointLight = PointLight(
-                worldPosition,
-                pointLight.color,
-                pointLight.distance,
-                pointLight.decay
-            );
-
-            getPointLightInfo( pointLight, geometry, directLight );
-
-            // #if defined( USE_SHADOWMAP ) && ( UNROLLED_LOOP_INDEX < NUM_POINT_LIGHT_SHADOWS )
-            // pointLightShadow = pointLightShadows[ i ];
-            // directLight.color *= all( bvec2( directLight.visible, receiveShadow ) ) ? getPointShadow( pointShadowMap[ i ], pointLightShadow.shadowMapSize, pointLightShadow.shadowBias, pointLightShadow.shadowRadius, vPointShadowCoord[ i ], pointLightShadow.shadowCameraNear, pointLightShadow.shadowCameraFar ) : 1.0;
-            // #endif
-
-            RE_Direct( directLight, geometry, material, reflectedLight );
-            // float dotN = max( dot( geometry.normal, directLight.direction ), 0.0 );
-            // reflectedLight.directDiffuse = diffuseColor * directLight.color * dotN;
-            // #include <lights_fragment_begin> : edited end
-
-            // #include <lights_fragment_maps>
-            // #include <lights_fragment_end>
-
-            vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + 
-                reflectedLight.directSpecular + reflectedLight.indirectSpecular + emissiveColor;
-
-            finalColor = vec4( outgoingLight, 1.0 );
-            // finalColor = vec4( 0.1, 0.0, 0.0, 1.0 );
-            // finalColor = vec4( pointLight.position, 1.0 );
-            // finalColor = vec4( emissiveColor, 1.0 );
-        }
-    `,
 
     pointLightVertex: /*glsl*/`#version 300 es
         precision highp float;
@@ -51501,25 +51303,11 @@ const lightSphereShader = {
             vTransform = transform;
             vPointLight = pointLight;
 
-            vec3 transformed = position * transform.w + transform.xyz; // scale sphere by light distance
-            // if ( transform.w != 0.0 ) {
-                gl_Position = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
-            // } else {
-            //     gl_Position = vec4( 20.0, 20.0, 20.0, 1.0 );
-            // }
+            // Scale the sphere by light distance and translate
+            vec3 transformed = position * transform.w + transform.xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4( transformed, 1.0 );
         }
     `,
-    
-    // fragment2: /*glsl*/`#version 300 es
-    //     precision highp float;
-
-    //     layout(location = 0) out vec4 finalColor;
-
-    //     void main() {
-
-    //         finalColor = vec4( 0.01, 0.0, 0.0, 1.0 );
-    //     }
-    // `,
     pointLightFragment: /*glsl*/`#version 300 es
         precision highp float;
         
@@ -51610,8 +51398,6 @@ const lightSphereShader = {
         // #include <clipping_planes_pars_fragment>
 
         // The single PointLight for each sphere
-        // uniform PointLight pointLight;
-
         in vec4 vTransform; // world position, distance
         in vec4 vPointLight; // color, decay
 
@@ -51627,19 +51413,10 @@ const lightSphereShader = {
             float depth = texture( gPosition, uv ).a;
             vec3 normal = normalize( texture( gNormal, uv ).xyz );
             vec3 diffuseColor = texture( gDiffuse, uv ).rgb;
-            vec3 emissiveColor = texture( gEmissive, uv ).rgb;
             float shininess = texture( gEmissive, uv ).a;
             vec3 specular = vec3( texture( gNormal, uv ).a );
 
-            // if ( depth > gl_FragCoord.z ) { // depth testing
-            //     discard;
-            // }
-
-            // vec4 mvPosition = viewMatrix * vec4( position, 1.0 );
-            // vec3 vViewPosition = - mvPosition.xyz;
-
             ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );
-            // TODO: vec3 totalEmissiveRadiance = emissive;
 
             // Accumulation
             // #include <lights_phong_fragment> : edited start
@@ -51662,7 +51439,6 @@ const lightSphereShader = {
             IncidentLight directLight;
 
             PointLight fullPointLight = PointLight(
-                // viewPosition,
                 vTransform.xyz,
                 vPointLight.rgb,
                 vTransform.w,
@@ -51685,13 +51461,10 @@ const lightSphereShader = {
             // #include <lights_fragment_end>
 
             vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + 
-                reflectedLight.directSpecular + reflectedLight.indirectSpecular + emissiveColor;
+                reflectedLight.directSpecular + reflectedLight.indirectSpecular;
 
             finalColor = vec4( outgoingLight, 1.0 );
-            // finalColor = vec4( vPointLight.rgb, 1.0 );
             // finalColor = vec4( 0.03, 0.0, 0.0, 1.0 );
-            // finalColor = vec4( pointLight.position, 1.0 );
-            // finalColor = vec4( emissiveColor, 1.0 );
         }
     `
 };
@@ -51912,6 +51685,8 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
             glslVersion: GLSL3
         });
 
+		this.type = 'DeferredMeshPhongMaterial';
+
         // Default values fill
         this.#_map = options.map;
         this.#_emissiveMap = options.emissiveMap;
@@ -52043,6 +51818,54 @@ class FullScreenTriangleGeometry extends BufferGeometry {
         const uvs = new Float32Array([ 0, 0, 2, 0, 0, 2 ]);
         this.setAttribute( 'position', new BufferAttribute( vertices, 3 ) );
         this.setAttribute( 'uv', new BufferAttribute( uvs, 2 ) );
+    }
+}
+
+class PointLightHelperGeometry extends BufferGeometry {
+    /**
+     * Geometry for Unreal Engine style point light visualization
+     * @param { Number } heightSegments - How many segments should each circle have.
+     * The more segments, the smoother the circles are
+     */
+    constructor( heightSegments = 25 ) {
+        super();
+
+        const radius = 1;
+        const stepY = radius * 2 / ( heightSegments - 1 );
+
+        const forwardRing = [];
+        const sideRing = [];
+        const upRing = [];
+
+        // Make one ring
+        const vec3 = new Vector3();
+        for ( let i = 0; i < heightSegments; i++ ) {
+            vec3.y = radius - i * stepY;
+            vec3.x = 1.0 - Math.abs( vec3.y );
+            vec3.setLength( radius );
+            forwardRing.push( vec3.x, vec3.y, vec3.z );
+        }
+        for ( let i = (heightSegments - 2) * 3; i >= 0; i-= 3 ) {
+            forwardRing.push( -forwardRing[ i ], forwardRing[ i + 1 ], forwardRing[ i + 2 ] );
+        }
+
+        // Copy the ring with reversed X and Z
+        for ( let i = 0, n = forwardRing.length; i < n; i+= 3 ) {
+            sideRing.push( forwardRing[ i + 2 ], forwardRing[ i + 1 ], forwardRing[ i ] );
+        }
+
+        // A little "bridge" connecting side and up rings, so that the next ring starts in the right place
+        for ( let i = 0, n = forwardRing.length / 4; i < n; i+= 3 ) {
+            sideRing.push( forwardRing[ i ], forwardRing[ i + 1 ], forwardRing[ i + 2 ] );
+        }
+
+        // Copy the ring onto the "belt"
+        for ( let i = 0, n = forwardRing.length; i < n; i+= 3 ) {
+            upRing.push( forwardRing[ i + 1 ], forwardRing[ i + 2 ], forwardRing[ i ] );
+        }
+
+        const vertices = new Float32Array( [].concat( forwardRing, sideRing, upRing ) );
+        this.setAttribute( 'position', new BufferAttribute( vertices, 3 ) );
     }
 }
 
@@ -52228,6 +52051,8 @@ Object.assign( OGAR, THREE );
 class Engine {
 
     #_renderer;
+    #_gl;
+    #_depthRenderBuffer;
     #_MRT;
     #_dynamicLightsRT;
     #_deferredShading;
@@ -52237,6 +52062,7 @@ class Engine {
     #_settings;
     #_visibleObjects;
     #_visualizePointLightVolumes;
+    #_pointLightHelpers;
     #_lights;
     #_lightScaleFactor;
     #_cameraPosition;
@@ -52321,6 +52147,12 @@ class Engine {
         this.#_renderer.outputEncoding = sRGBEncoding;
         this.#_renderer.physicallyCorrectLights = true;
         this.#_lightScaleFactor = ( this.#_renderer.physicallyCorrectLights !== true ) ? Math.PI : 1;
+        this.#_gl = this.#_renderer.getContext();
+
+        // this.#_renderer.autoClear = false;
+        // this.#_renderer.autoClearColor = false;
+        // this.#_renderer.autoClearDepth = false;
+        // this.#_renderer.autoClearStencil = false;
 
         this.#_renderer.info.autoReset = false;
 
@@ -52337,7 +52169,8 @@ class Engine {
             {
                 minFilter: NearestFilter,
                 magFilter: NearestFilter,
-                type: FloatType
+                type: FloatType,
+                depthBuffer: false
             }
         );
         this.#_RENDER_TARGETS.push( this.#_forwardRendering.RT );
@@ -52373,9 +52206,9 @@ class Engine {
 			this.#_MRT.texture[ i ].type = FloatType;
 		}
 
-        this.#_MRT.depthTexture = new DepthTexture();
-		this.#_MRT.depthTexture.format = DepthFormat;
-		this.#_MRT.depthTexture.type = UnsignedShortType;
+        // https://discourse.threejs.org/t/apply-depth-buffer-from-render-target-to-the-next-render/37276
+        const renderBufferProps = this.#_renderer.properties.get( this.#_MRT );
+        this.#_depthRenderBuffer = renderBufferProps.__webglDepthRenderbuffer || renderBufferProps.__webglDepthbuffer;
 
 		// Name our G-Buffer attachments for debugging
 		this.#_MRT.texture[ 0 ].name = 'position';
@@ -52385,19 +52218,16 @@ class Engine {
 
         this.#_RENDER_TARGETS.push( this.#_MRT );
 
-        console.log( 'this.#_MRT:', this.#_MRT );
-
         // PostProcessing full-screen triangle setup
         this.#_deferredShading = {};
 		this.#_deferredShading.scene = new Scene();
-        this.#_deferredShading.scene.autoUpdate = true;
 		this.#_deferredShading.camera = new OrthographicCamera( -1, 1, 1, -1, 0, 1 );
         this.#_deferredShading.objects = [];
 
         let fragmentShader = finalRenderFragment;
         if ( this.#_settings.debugGbuffer ) {
             fragmentShader = fragmentShader.replace(
-                `finalColor = vec4( outgoingLight, 1.0 );`,
+                `finalColor = vec4( finalLight, 1.0 );`,
                 debug_fragment_output
             );
         }
@@ -52425,7 +52255,7 @@ class Engine {
                 dynamicLights: { value: this.#_dynamicLightsRT.texture },
                 ambientLight: { value: new Color() },
                 hemiLights: { value: [] },
-                directionalLights: { value: [] },
+                dirLights: { value: [] },
                 // Forward Render
                 forwardRender: { value: this.#_forwardRendering.RT.texture }
             },
@@ -52438,14 +52268,12 @@ class Engine {
             this.#_deferredShading.shader
         );
         this.#_deferredShading.fullScreenMesh.frustumCulled = false;
-        console.log( 'this.#_deferredShading.fullScreenMesh:', this.#_deferredShading.fullScreenMesh ); 
     }
 
     #_setupDynamicLights() {
 
         this.#_setupPointLights();
         // this.#_setupSpotLights(); TODO
-        // this.#_setupDirectionalLights(); TODO
 
     }
 
@@ -52455,8 +52283,11 @@ class Engine {
     #_setupPointLights() {
 
         // PointLight volume spheres
-        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 16, 8 );
-        const lightSphereGeometry = new SphereGeometry( 1, 8, 6 );
+        // Different levels of volume accuracy. 4th seems to cut off at boundries sometimes.
+        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 32, 16 ); // 1 max
+        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 16, 8 ); // 2
+        const lightSphereGeometry = new SphereGeometry( 1, 8, 6 ); // 3
+        // const lightSphereGeometry = new THREE.SphereGeometry( 1, 6, 4 ); // 4 lowest
         const lightSphereInstancedGeometry = new InstancedBufferGeometry();
         const maxLights = 10000;
         lightSphereInstancedGeometry.instanceCount = 0;
@@ -52484,11 +52315,46 @@ class Engine {
             },
             side: BackSide,
             blending: AdditiveBlending,
-            depthWrite: false
+            depthWrite: false,
+            depthTest: false
         });
         this.lightVolumeSpheres = new Mesh( lightSphereInstancedGeometry, lightSphereMaterial );
         this.lightVolumeSpheres.frustumCulled = false;
         this.#_deferredShading.scene.add( this.lightVolumeSpheres );
+
+        this.#_setupPointLightHelpers();
+    }
+
+    #_setupPointLightHelpers() {
+
+        const lightSphereGeometry = new PointLightHelperGeometry( 25 );
+        const lightHelperInstancedGeometry = new InstancedBufferGeometry();
+        const maxLights = 10000;
+        lightHelperInstancedGeometry.instanceCount = 1;
+
+        lightHelperInstancedGeometry.attributes = lightSphereGeometry.attributes;
+
+        const transformAttribute = new InstancedBufferAttribute( new Float32Array( maxLights * 4 ), 4 );
+        lightHelperInstancedGeometry.setAttribute( 'transform', transformAttribute );
+        // transformAttribute.setUsage( THREE.DynamicDrawUsage );
+
+        const lightHelperMaterial = new LineBasicMaterial();
+        lightHelperMaterial.onBeforeCompile = ( program ) => {
+            program.vertexShader = `
+                in vec4 transform;
+            ` + program.vertexShader;
+            program.vertexShader = program.vertexShader.replace(
+                `#include <begin_vertex>`,
+                `
+                    vec3 transformed = vec3( position ) * transform.w;
+                    // vec3 transformed = vec3( position );
+                    transformed += transform.xyz;
+                `
+            );
+        };
+
+        this.#_pointLightHelpers = new Line( lightHelperInstancedGeometry, lightHelperMaterial );
+        this.#_pointLightHelpers.frustumCulled = false;
 
         this.#_visualizePointLightVolumes = false;
     }
@@ -52499,9 +52365,9 @@ class Engine {
     #_setupDebugger() {
 
         this.debugger = new Debugger();
-        // this.debugger.addLine( this.#_renderer.info.render, 'triangles', 'Triangles', false );
-        // this.debugger.addLine( this.#_renderer.info.render, 'calls', 'Draw Calls', false );
         this.debugger.addLine( this.#_renderer.info.render, 'triangles', 'Triangles' );
+        this.debugger.addLine( this.#_renderer.info.render, 'lines', 'Lines' );
+        this.debugger.addLine( this.#_renderer.info.render, 'points', 'Points' );
         this.debugger.addLine( this.#_renderer.info.render, 'calls', 'Draw Calls' );
         this.debugger.addLine( this.#_renderer.info.programs, 'length', 'Programs' );
         this.debugger.addLine( this.#_renderer.info.memory, 'geometries', 'Geometries' );
@@ -52530,8 +52396,6 @@ class Engine {
             renderTarget.setSize( window.innerWidth * dpr, window.innerHeight * dpr );
         }
 
-		// this.#_MRT.setSize( window.innerWidth * dpr, window.innerHeight * dpr );
-		// this.#_dynamicLightsRT.setSize( window.innerWidth * dpr, window.innerHeight * dpr );
         this.#_renderer.getSize( this.screenSize ).multiplyScalar( window.devicePixelRatio );
         this.lightVolumeSpheres.material.uniforms[ 'uScreenSize' ].value = this.screenSize;
     }
@@ -52602,6 +52466,14 @@ class Engine {
             pointLight.distance
         );
 
+        if ( this.#_visualizePointLightVolumes ) {
+            this.#_pointLightHelpers.geometry.getAttribute('transform').setXYZW(
+                this.#_lights.point.count,
+                this.vec3.x, this.vec3.y, this.vec3.z,
+                pointLight.distance
+            );
+        }
+
         this.color.copy( pointLight.color ).multiplyScalar( pointLight.intensity * this.#_lightScaleFactor ),
         this.#_lights.point.pointLightAttribute.setXYZW(
             this.#_lights.point.count,
@@ -52629,7 +52501,7 @@ class Engine {
         this.vec3.setFromMatrixPosition( directionalLight.target.matrixWorld );
         dirLightUniform.direction.sub( this.vec3 );
 
-        this.#_deferredShading.fullScreenMesh.material.uniforms.directionalLights.value.push( dirLightUniform );
+        this.#_deferredShading.fullScreenMesh.material.uniforms.dirLights.value.push( dirLightUniform );
     }
 
     #_updateObjects( scene, camera ) {
@@ -52643,6 +52515,7 @@ class Engine {
         this.#_lights.directional.count = 0;
         this.#_lights.hemi.count = 0;
         this.#_deferredShading.fullScreenMesh.material.uniforms.hemiLights.value = [];
+        this.#_deferredShading.fullScreenMesh.material.uniforms.dirLights.value = [];
 
         // artist-friendly light intensity scaling factor
         this.#_lightScaleFactor = ( this.#_renderer.physicallyCorrectLights !== true ) ? Math.PI : 1;
@@ -52674,6 +52547,12 @@ class Engine {
         this.lightVolumeSpheres.geometry.instanceCount = this.#_lights.point.count;
         this.#_lights.point.transformAttribute.needsUpdate = true;
         this.#_lights.point.pointLightAttribute.needsUpdate = true;
+
+        if ( this.#_visualizePointLightVolumes ) {
+            this.#_pointLightHelpers.geometry.instanceCount = this.#_lights.point.count;
+            this.#_pointLightHelpers.geometry.getAttribute('transform').needsUpdate = true;
+        }
+
         this.#_deferredShading.fullScreenMesh.material.uniforms.ambientLight.value = this.#_lights.ambient;
 
         // DEFINES (require shader recompilation)
@@ -52681,9 +52560,9 @@ class Engine {
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_HEMI_LIGHTS !== this.#_lights.hemi.count ||
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_DIR_LIGHTS !== this.#_lights.directional.count
         ) {
-            this.#_deferredShading.fullScreenMesh.material.needsUpdate = true;
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_HEMI_LIGHTS = this.#_lights.hemi.count;
             this.#_deferredShading.fullScreenMesh.material.defines.NR_OF_DIR_LIGHTS = this.#_lights.directional.count;
+            this.#_deferredShading.fullScreenMesh.material.needsUpdate = true;
         }
     }
 
@@ -52691,7 +52570,7 @@ class Engine {
      * Forward rendering of any objects with no deferred material
      */
     #_renderForward( scene, camera ) {
-
+        // Show forward material meshes
         for( let i = 0, len = this.#_forwardRendering.objects.length; i < len; i++ ) {
 
             this.#_forwardRendering.objects[ i ].layers.set( 0 );
@@ -52701,66 +52580,35 @@ class Engine {
 
             this.#_deferredShading.objects[ i ].layers.set( this.invisibleLayer );
         }
+        // Add debugging objects
+        if ( this.#_visualizePointLightVolumes ) scene.add( this.#_pointLightHelpers );
 
+        // Assign forward RT and do depth buffer magic. We want to preserve the depth buffer for built-in Z-test.
+        // For more info: https://discourse.threejs.org/t/apply-depth-buffer-from-render-target-to-the-next-render/37276
+		this.#_renderer.setRenderTarget( this.#_forwardRendering.RT );
 
-        // Bread Fan code
-        const gl = this.#_renderer.getContext();
+        const renderBufferProps = this.#_renderer.properties.get( this.#_MRT );
+        this.#_depthRenderBuffer = renderBufferProps.__webglDepthRenderbuffer || renderBufferProps.__webglDepthbuffer;
 
-        // this.#_renderer.state.bindFramebuffer( gl.FRAMEBUFFER, null );
-        this.#_renderer.setRenderTarget( null );
+        if ( this.#_depthRenderBuffer ) 
+            this.#_gl.framebufferRenderbuffer( this.#_gl.FRAMEBUFFER, this.#_gl.DEPTH_ATTACHMENT, this.#_gl.RENDERBUFFER, this.#_depthRenderBuffer );
 
-        // const webglDepthTexture = this.#_renderer.properties.get( renderTarget.depthTexture ).__webglTexture;
-        // const webglDepthTexture = this.#_renderer.properties.get( this.#_MRT.depthTexture ).__webglTexture;
-        // console.log( 'webglDepthTexture:', webglDepthTexture );
-        // console.log( 'this.#_MRT.depthTexture:', this.#_MRT.depthTexture );
-        // document.body.append( this.#_MRT.depthTexture ); 
-        // gl.framebufferTexture2D( gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, webglDepthTexture, 0 );
+        this.#_renderer.autoClearDepth = false;
 
-
-        // or, blit
-
-
-        // const gBuffer = this.#_renderer.properties.get( renderTarget ).__webglFramebuffer;
-        // const gBuffer = this.#_renderer.properties.get( this.#_MRT.texture[ 0 ] ).__webglFramebuffer;
-
-        // console.log( 'gBuffer:', gBuffer );
-
-        // this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, this.#_MRT.texture[ 0 ] );
-        // this.#_renderer.state.bindFramebuffer( gl.WRITE_FRAMEBUFFER, null );
-        // gl.blitFramebuffer( 0, 0, this.#_MRT.width, this.#_MRT.height, 0, 0, this.#_MRT.width, this.#_MRT.height, gl.DEPTH_BUFFER_BIT, gl.NEAREST );
-        // this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, null );
-
-
-        // new blit
-
-        const gBuffer = this.#_renderer.properties.get( this.#_MRT ).__webglFramebuffer;
-        // console.log( 'gBuffer:', gBuffer );
-
-        this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, gBuffer );
-        this.#_renderer.state.bindFramebuffer( gl.WRITE_FRAMEBUFFER, null );
-        gl.blitFramebuffer( 0, 0, this.#_MRT.width, this.#_MRT.height, 0, 0, this.#_MRT.width, this.#_MRT.height, gl.DEPTH_BUFFER_BIT, gl.NEAREST );
-        this.#_renderer.state.bindFramebuffer( gl.READ_FRAMEBUFFER, null );
-
-
-        // this.#_renderer.setRenderTarget( null );
-
-        // gl.bindFramebuffer( gl.READ_FRAMEBUFFER, gDeferredDrawer.FrameBuffer.Context );
-        // gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, null ); 
-        // gl.blitFramebuffer( 0, 0, gl.viewportWidth, gl.viewportHeight, 0, 0, gl.viewportWidth, gl.viewportHeight, gl.DEPTH_BUFFER_BIT, gl.NEAREST );
-        // gl.bindFramebuffer( gl.FRAMEBUFFER, null );
-
-
-
-
-		// this.#_renderer.setRenderTarget( null );
-		// this.#_renderer.setRenderTarget( this.#_forwardRendering.RT );
 		this.#_renderer.render( scene, camera );
+
+        this.#_renderer.autoClearDepth = true;
+
+        if ( this.#_depthRenderBuffer ) 
+            this.#_gl.framebufferRenderbuffer( this.#_gl.FRAMEBUFFER, this.#_gl.DEPTH_ATTACHMENT, this.#_gl.RENDERBUFFER, null );
 
         // Show deferred material meshes for next frame
         for( let i = 0, len = this.#_deferredShading.objects.length; i < len; i++ ) {
 
             this.#_deferredShading.objects[ i ].layers.set( 0 );
         }
+
+        if ( this.#_visualizePointLightVolumes ) scene.remove( this.#_pointLightHelpers );
     }
 
     render( scene, camera ) {
@@ -52785,12 +52633,17 @@ class Engine {
         // BREAD FAN - COMMENT OUT THE LINE ABOVE AND UNCOMMENT RENDER CODE BELOW TO SEE THE DEFERRED BOXES SCENE
 
         // Render dynamic lights optimized as volume spheres
-		// this.#_renderer.setRenderTarget( this.#_dynamicLightsRT );
-		// this.#_renderer.render( this.#_deferredShading.scene, camera );
+		this.#_renderer.setRenderTarget( this.#_dynamicLightsRT );
+		this.#_renderer.render( this.#_deferredShading.scene, camera );
 
         // Composite everything into the final image
-		// this.#_renderer.setRenderTarget( null );
-		// this.#_renderer.render( this.#_deferredShading.fullScreenMesh, camera );
+		this.#_renderer.setRenderTarget( null );
+
+        this.#_renderer.autoClear = false;
+
+		this.#_renderer.render( this.#_deferredShading.fullScreenMesh, camera );
+
+        this.#_renderer.autoClear = true;
 
     }
 
@@ -52803,7 +52656,6 @@ class Engine {
     }
     set visualizePointLightVolumes( bool ) {
         this.#_visualizePointLightVolumes = bool;
-        // TODO light volume helpers
     }
 }
 

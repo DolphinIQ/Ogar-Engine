@@ -21,7 +21,7 @@
 
         // UTILITY
         import Stats from './utils/stats.module.js';
-        import { GUI } from './utils/dat.gui.module.js';
+        import { GUI } from './utils/lil-gui.module.min.js';
 
         let engine, scene, camera, clock, delta, time;
         let orbitControls, stats, gui;
@@ -81,24 +81,15 @@
 
             setTimeout( () => {
                 material.normalMap = normalMap;
-                console.log( 'Updated normalMap to:', normalMap );
             }, 2000 );
 
             const ROWS = 5;
             const DISTANCE = 2;
             addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
-            const mesh = new OGAR.Mesh( geometry, material ); // mesh for debugging
-            console.log( 'Grid mesh:', mesh );
 
-            // Different sets of lighting for testing
-            const A_light = new OGAR.AmbientLight( 0xffffff, 0.3 );
-            const P_light = new OGAR.PointLight( 0xffffff, 20.0, 8 );
+            const P_light = new OGAR.PointLight( 0xffffff, 20.0, 8, 2 );
             P_light.position.set( 3, 2, 0 );
-            const D_light = new OGAR.DirectionalLight( 0xffffff, 3 );
-            D_light.position.set( 3, 5, 1 );
-            const S_light = new OGAR.SpotLight( 0xffffff, 5 );
-            S_light.position.set( 3, 5, 3 );
-            const H_light = new OGAR.HemisphereLight( 0xff0000, 0x00ff00, 1 );
+            const H_light = new OGAR.HemisphereLight( 0xff0000, 0x00ff00, 0.6 );
 
             const pointLightHelper = new OGAR.Mesh(
                 new OGAR.SphereBufferGeometry( 0.1, 8, 8 ),
@@ -109,10 +100,12 @@
             P_light.add( pointLightHelper );
             lightRotator.add( P_light );
             scene.add( lightRotator );
-            // scene.add( A_light );
-            // scene.add( D_light );
-            // scene.add( S_light );
             scene.add( H_light );
+
+            
+            // Debug
+            gui.add({ f: () => { engine.visualizePointLightVolumes = !engine.visualizePointLightVolumes; } }, 'f' )
+                .name('Visualize point light volumes');
 
             window.addEventListener('resize', onWindowResize, false);
 
