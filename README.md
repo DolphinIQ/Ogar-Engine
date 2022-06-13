@@ -92,4 +92,12 @@ ogarLoader.load('cube.ogar')
     });
 ```
 
+### 📝 TO DO List:
+- Specular mapping
+- Spotlights
+- Skinning
+- Shadow Mapping
+- Post Processing
+
+__________________________________
 ###### 2022 FIRST EVER OGAR ENGINE
