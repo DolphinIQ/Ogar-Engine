@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Basic Scene Ogar Engine Usage </title>
+
+    <link rel="stylesheet" href="css/examples.css">
+</head>
+<body>
+
+    <div class="info"> Combining deferred (cubes) and forward (sphere) rendered meshes together. Works with transparency. </div>
+
+    <script type="module">
+        // ENGINE
+        import { OGAR } from './dist/OGAR.module.js';
+
+        // CONTROLS
+        import { Orbit } from './utils/orbitControlsOGL.js';
+
+        // UTILITY
+        import Stats from './utils/stats.module.js';
+        import { GUI } from './utils/lil-gui.module.min.js';
+
+        let engine, scene, camera, clock, delta, time;
+        let orbitControls, stats, gui;
+        let textureLoader;
+        let lightRotator;
+
+        init();
+
+        function init() {
+
+            const engineOptions = {
+                debugger: true
+            };
+            const rendererOptions = {
+                precision: 'highp',
+                stencil: false
+            };
+            // Creates a full-screen canvas accessible as engine.canvas
+            engine = new OGAR.Engine( document.body, engineOptions, rendererOptions );
+            console.log( 'engine:', engine );
+
+            scene = new OGAR.Scene();
+
+            camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
+            camera.position.set( 0, 4, 8 );
+
+            orbitControls = new Orbit( camera, {
+                Vector2: OGAR.Vector2,
+                Vector3: OGAR.Vector3,
+                element: engine.canvas,
+                target: new OGAR.Vector3()
+            });
+
+            clock = new OGAR.Clock();
+
+            // Stats
+            stats = new Stats();
+            document.body.appendChild( stats.dom );
+
+            // GUI
+            gui = new GUI();
+            // gui.add(object, property, [min], [max], [step])
+
+            // Textures
+            textureLoader = new OGAR.TextureLoader();
+            const diffuseTexture = textureLoader.load('textures/ogar_hi.png');
+            const normalMap = textureLoader.load('textures/normal_map.png');
+
+            // MESHES
+            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 ); // cubes
+            const material = new OGAR.DeferredMeshPhongMaterial({
+                shininess: 25,
+                map: diffuseTexture,
+                normalMap: normalMap
+            });
+
+            const ROWS = 5;
+            const DISTANCE = 2;
+            addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
+
+            // FORWARD RENDERED MESH - just use a "normal" Three.js material
+            const forwardRenderedMesh = new OGAR.Mesh(
+                new OGAR.SphereGeometry( 2, 32, 32 ),
+                new OGAR.MeshPhongMaterial({
+                    color: 0xff0000,
+                    transparent: true,
+                    opacity: 0.8
+                })
+            );
+            scene.add( forwardRenderedMesh );
+
+            // LIGHTS
+            const P_light = new OGAR.PointLight( 0xffffff, 20.0, 8, 2 );
+            P_light.position.set( 3, 2, 0 );
+            const H_light = new OGAR.HemisphereLight( 0xff0000, 0x00ff00, 0.6 );
+
+            const pointLightHelper = new OGAR.Mesh(
+                new OGAR.SphereBufferGeometry( 0.1, 8, 8 ),
+                new OGAR.DeferredMeshPhongMaterial({ emissive: 0xffffff })
+            );
+            lightRotator = new OGAR.Object3D();
+
+            P_light.add( pointLightHelper );
+            lightRotator.add( P_light );
+            scene.add( lightRotator );
+            scene.add( H_light );
+
+            
+            // Debug
+            gui.add( forwardRenderedMesh.material, 'opacity', 0, 1, 0.01 ).name('Sphere opacity')
+            gui.add({ f: () => { engine.visualizePointLightVolumes = !engine.visualizePointLightVolumes; } }, 'f' )
+                .name('Visualize point light volumes');
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            requestAnimationFrame( animate );
+        }
+
+        function addMeshesInGrid( rows, cols, distance, geometry, material, scene ) {
+            for( let i = 0; i < rows; i++ ) {
+                for( let j = 0; j < cols; j++ ) {
+                    const mesh = new OGAR.Mesh( geometry, material );
+                    mesh.position.x = distance * (j - (rows - 1) / 2);
+                    mesh.position.z = distance * (i - (cols - 1) / 2);
+                    scene.add( mesh );
+                }
+            }
+        }
+
+        function animate() {
+            stats.begin();
+
+            delta = clock.getDelta();
+            time = clock.getElapsedTime();
+            orbitControls.update();
+
+            lightRotator.rotation.y += 0.8 * delta;
+
+            engine.render( scene, camera );
+
+            requestAnimationFrame( animate );
+            stats.end();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        }
+    </script>
+</body>
+</html>

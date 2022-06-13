@@ -19,8 +19,9 @@
 ## View the current examples:
 1. [Basic Scene](https://dolphiniq.github.io/Ogar-Engine/examples/basicScene)
 2. [Phong Material](https://dolphiniq.github.io/Ogar-Engine/examples/phongMaterial)
-3. [Thousands of Point Lights](https://dolphiniq.github.io/Ogar-Engine/examples/manyPointLights) (performance benchmarking example)
-4. [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
+3. [Combining Deferred and Forward Rendering/Transparency](https://dolphiniq.github.io/Ogar-Engine/examples/forwardTransparency)
+4. [Thousands of Point Lights](https://dolphiniq.github.io/Ogar-Engine/examples/manyPointLights) (performance benchmarking example)
+5. [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
 
 ## How to run the examples locally:
 1. Fork the repository
@@ -56,7 +57,7 @@ const scene = new OGAR.Scene();
 const camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
 
 const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 );
-const material = new OGAR.DeferredMeshPhongMaterial({ // The only Phong-based supported material for now
+const material = new OGAR.DeferredMeshPhongMaterial({ // Use a deferred material
     shininess: 25,
     map: diffuseTexture,
     normalMap: normalTexture
