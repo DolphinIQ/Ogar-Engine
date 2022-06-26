@@ -94,7 +94,6 @@
                 map: diffuseTexture,
                 normalMap: normalTexture,
                 normalScale: new OGAR.Vector2( NORMAL_SCALE, NORMAL_SCALE ),
-                
                 specularMap: specularTexture,
                 emissiveMap: emissiveTexture,
                 emissive: new OGAR.Color( 0xffffff ),
@@ -102,7 +101,6 @@
             });
 
             gui.add( material, 'shininess', 0, 50, 1 );
-            gui.add( material, 'bumpScale', 0, 2, 0.01 );
             gui.addColor( { string: '#ffffff' }, 'string' ).onChange( ( value ) => {
                 material.emissive = value;
             }).name('emissive');
