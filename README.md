@@ -10,7 +10,7 @@
 
 ## Deferred Rendering Engine
 
-**OGAR Engine** is a transformation of [Three.js](https://threejs.org) into a deferred engine. Goal of this project is to give people the option and/or starting point of a deferred shading pipeline, with the familiarity of Three.js friendly API.
+**OGAR Engine** is a transformation of [Three.js](https://threejs.org) into a deferred engine. Goal of this project is to give people the option and/or starting point of a deferred shading pipeline, with the familiarity of Three.js friendly API. It is recommended for you to be familiar and comfortable with Three.js API before using Ogar Engine.
 
 **Ogar** 😼 is pronounced as: [google translate pronunciation](https://translate.google.com/?hl=pl&sl=pl&tl=en&text=ogar&op=translate)
 
@@ -74,14 +74,14 @@ function animate() { // Inside your animation loop
     engine.render( scene, camera );
 }
 ```
-Please note OGAR relies on a fixed Three.js version (which is planned to keep being updated) and thus alongside it's calsses it encapsulates Three.js API whithin it's namespace. For example:
+Please note that since this project is a fusion of Three.js and deferred rendering, a lot of API might be mixed together. That is why I decided to keep it all under one `OGAR` namespace to avoid confusion. OGAR relies on a fixed Three.js version (which is planned to keep being updated) and thus alongside it's calsses, it also encapsulates Three.js API whithin it's namespace. You can freely use Three.js API in OGAR, just make sure to use the correct namespace. For example:
 ```js
 const geometry = new OGAR.BoxGeometry();
 // ^ is the same in OGAR as:
 const geometry = new THREE.BoxGeometry();
 // ^ this in Three.js
 ```
-If you see an API not documented in (https://threejs.org/docs), it is likely a new Ogar API. For example: `OGAR.DeferredMeshPhongMaterial` or `OGAR.Engine`. A list of new Ogar API and differences from Three.js API will be made once the engine reaches a stable version.
+If you see an API not documented in https://threejs.org/docs, it is likely a new Ogar API. For example: `OGAR.DeferredMeshPhongMaterial` or `OGAR.Engine`. A list of new Ogar API and differences from Three.js API will be made once the engine reaches a stable version.
 
 ### 🕋 Export and Import binary .ogar files:
 (No practical usage yet)
@@ -103,7 +103,6 @@ ogarLoader.load('cube.ogar')
 ```
 
 ### 📝 TO DO List:
-- Specular mapping
 - Spotlights
 - Skinning
 - Shadow Mapping
