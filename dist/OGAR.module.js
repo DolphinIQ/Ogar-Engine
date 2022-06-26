@@ -51471,6 +51471,8 @@ const lightSphereShader = {
 
 const gBufferVertex = /*glsl*/`
 
+    uniform vec2 textureRepeat;
+
     out vec3 vPosition;
     out vec3 vNormal;
     out vec2 vUv;
@@ -51531,7 +51533,7 @@ const gBufferVertex = /*glsl*/`
 
         // vNormal = normalize( (modelMatrix * vec4( transformedNormal, 0.0 )).xyz ); // world space normal
         vNormal = normalize( (modelMatrix * vec4( vNormal, 0.0 )).xyz ); // world space normal
-        vUv = uv;
+        vUv = uv * textureRepeat;
         vPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz; // vec4 * matrix4 =/= matrix4 * vec4
 
         gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
@@ -51547,7 +51549,9 @@ const gBufferFragment = /*glsl*/`
 
     #include <map_pars_fragment>
     #include <emissivemap_pars_fragment>
+    #include <bumpmap_pars_fragment>
     #include <normalmap_pars_fragment>
+    #include <specularmap_pars_fragment>
 
     uniform float uCameraNear;
     uniform float uCameraFar;
@@ -51576,6 +51580,7 @@ const gBufferFragment = /*glsl*/`
 
         vec4 diffuseColor = vec4( uColor, 1.0 );
         vec3 totalEmissiveRadiance = uEmissive;
+        float specularColor = uSpecular;
 
         #ifdef USE_MAP
             vec4 texelColor = texture2D( map, uv );
@@ -51589,22 +51594,32 @@ const gBufferFragment = /*glsl*/`
             totalEmissiveRadiance *= emissiveColor.rgb;
         #endif
 
+        // #include <specularmap_fragment>
+        float specularStrength;
+        #ifdef USE_SPECULARMAP
+            vec4 texelSpecular = texture2D( specularMap, vUv );
+            specularStrength = texelSpecular.r;
+        #else
+            specularStrength = 1.0;
+        #endif
+        specularColor *= specularStrength;
 
         // #include <normal_fragment_begin> : edited start
-        float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
-        #ifdef FLAT_SHADED
-            // Workaround for Adreno GPUs not able to do dFdx( vViewPosition )
-            vec3 fdx = vec3( dFdx( vViewPosition.x ), dFdx( vViewPosition.y ), dFdx( vViewPosition.z ) );
-            vec3 fdy = vec3( dFdy( vViewPosition.x ), dFdy( vViewPosition.y ), dFdy( vViewPosition.z ) );
-            vec3 normal = normalize( cross( fdx, fdy ) );
-        #else
-            vec3 normal = normalize( vNormal ); // world normal
+        // float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
+        // #ifdef FLAT_SHADED
+        //     // Workaround for Adreno GPUs not able to do dFdx( vViewPosition )
+        //     vec3 fdx = vec3( dFdx( vViewPosition.x ), dFdx( vViewPosition.y ), dFdx( vViewPosition.z ) );
+        //     vec3 fdy = vec3( dFdy( vViewPosition.x ), dFdy( vViewPosition.y ), dFdy( vViewPosition.z ) );
+        //     vec3 normal = normalize( cross( fdx, fdy ) );
+        // #else
+        //     vec3 normal = normalize( vNormal ); // world normal
 
-            #ifdef DOUBLE_SIDED
-                normal = normal * faceDirection;
-            #endif
-        #endif
+        //     #ifdef DOUBLE_SIDED
+        //         normal = normal * faceDirection;
+        //     #endif
+        // #endif
         // #include <normal_fragment_begin> : edited end
+        #include <normal_fragment_begin>
 
         // #include <normal_fragment_maps> : edited start
         #ifdef OBJECTSPACE_NORMALMAP
@@ -51620,7 +51635,7 @@ const gBufferFragment = /*glsl*/`
 
             // normal = normalize( normalMatrix * normal );
 
-            no support for objectspace normal map
+            no_support_for_objectspace_normal_map
 
         #elif defined( TANGENTSPACE_NORMALMAP )
 
@@ -51643,11 +51658,14 @@ const gBufferFragment = /*glsl*/`
 
         // Write position, depth, normal, shading and color data to G-Buffer
         gPosition = vec4( position, depth );
-        gNormal = vec4( normal, uSpecular );
+        gNormal = vec4( normal, specularColor );
         gColor = diffuseColor;
+        // gColor = vec4( vec3( specularColor ), 1.0 );
         gEmissive = vec4( totalEmissiveRadiance, uShininess );
     }
 `;
+
+const color = new Color();
 
 // Use ShaderMaterial, instead of RawShaderMaterial, in order to have THREE fill material.defines
 class DeferredMeshPhongMaterial extends ShaderMaterial {
@@ -51661,21 +51679,28 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
  * - emissive { THREE.Color } - emissive color
  * - emissiveMap { THREE.Texture } - emissive map
  * - emissiveIntensity { Number } - emissive scalar factor
+ * - bumpMap { THREE.Texture } - bump map
+ * - bumpScale { Number } - bump map scale
  * - normalMap { THREE.Texture } - normal map
  * - normalScale { THREE.Vector2 } - normal map scale
+ * - specularMap { THREE.Texture } - specular map
  * - specular { Number } - specular color - supports only black-white values
  * - shininess { Number } - shininess value
  */
     #_camera
     #_map
     #_emissiveMap
+    #_bumpMap
+    #_bumpScale
     #_normalMap
     #_normalScale
     #_color
     #_emissive
     #_emissiveIntensity
+    #_specularMap
     #_specular
     #_shininess
+    #_textureRepeat
 
     constructor( options ) {
 
@@ -51686,6 +51711,7 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
         });
 
 		this.type = 'DeferredMeshPhongMaterial';
+        this.isDeferred = true;
 
         // Default values fill
         this.#_map = options.map;
@@ -51693,6 +51719,10 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
         this.#_normalMap = options.normalMap;
 		this.normalMapType = TangentSpaceNormalMap;
         this.#_normalScale = options.normalScale || new Vector2( 1, 1 );
+        this.#_bumpMap = options.bumpMap;
+        this.#_bumpScale = options.bumpScale || 1;
+        this.#_specularMap = options.specularMap;
+        this.#_textureRepeat = options.textureRepeat || new Vector2( 1, 1 );
 
         this.#_color = options.color ? // check for hexadecimal
             ( options.color.isColor ? options.color : new Color( options.color ) ) : new Color( 1, 1, 1 );
@@ -51706,8 +51736,12 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
         // Uniforms
         this.uniforms['map'] = { value: this.#_map };
         this.uniforms['emissiveMap'] = { value: this.#_emissiveMap };
+        this.uniforms['specularMap'] = { value: this.#_specularMap };
         this.uniforms['normalMap'] = { value: this.#_normalMap };
         this.uniforms['normalScale'] = { value: this.#_normalScale };
+        this.uniforms['bumpMap'] = { value: this.#_bumpMap };
+        this.uniforms['bumpScale'] = { value: this.#_bumpScale };
+        this.uniforms['textureRepeat'] = { value: this.#_textureRepeat };
         this.uniforms['uColor'] = { value: this.#_color };
         this.uniforms['uEmissive'] = { value: this.#_emissive };
         this.uniforms['uSpecular'] = { value: this.#_specular };
@@ -51723,6 +51757,14 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
         this.#_camera = value;
         this.uniforms['uCameraNear'].value = this.#_camera.near;
         this.uniforms['uCameraFar'].value = this.#_camera.far;
+    }
+
+    get textureRepeat() {
+        return this.#_textureRepeat;
+    }
+    set textureRepeat( value ) {
+        this.#_textureRepeat = value;
+        this.uniforms['textureRepeat'] = this.#_textureRepeat;
     }
 
     get map() {
@@ -51760,12 +51802,33 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
         this.uniforms['normalScale'].value = value;
     }
 
+    get bumpMap() {
+        return this.#_bumpMap;
+    }
+    set bumpMap( value ) {
+        this.#_bumpMap = value;
+        this.uniforms['bumpMap'].value = value;
+    }
+
+    get bumpScale() {
+        return this.#_bumpScale;
+    }
+    set bumpScale( value ) {
+        this.#_bumpScale = value;
+        this.uniforms['bumpScale'].value = value;
+    }
+
     get emissive() {
         return this.#_emissive;
     }
     set emissive( value ) {
-        this.#_emissive = value;
-        this.uniforms['uEmissive'].value = value.multiplyScalar( this.#_emissiveIntensity );
+        if ( value.isColor ) {
+            this.#_emissive = value;
+            this.uniforms['uEmissive'].value = value.multiplyScalar( this.#_emissiveIntensity );
+        } else { // check for hexadecimal
+            this.#_emissive.set( value );
+            this.uniforms['uEmissive'].value = color.copy( this.#_emissive ).multiplyScalar( this.#_emissiveIntensity );
+        }
     }
 
     get emissiveIntensity() {
@@ -51773,15 +51836,27 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
     }
     set emissiveIntensity( value ) {
         this.#_emissiveIntensity = value;
-        this.uniforms['uEmissive'].value = this.#_emissive.multiplyScalar( value );
+        this.uniforms['uEmissive'].value = color.copy( this.#_emissive ).multiplyScalar( value );
     }
 
     get color() {
         return this.#_color;
     }
     set color( value ) {
-        this.#_color = value;
-        this.uniforms['uColor'].value = value;
+        if ( value.isColor ) {
+            this.#_color = value;
+        } else { // check for hexadecimal
+            this.#_color.set( value );
+        }
+        this.uniforms['uColor'].value = this.#_color;
+    }
+
+    get specularMap() {
+        return this.#_specularMap;
+    }
+    set specularMap( value ) {
+        this.#_specularMap = value;
+        this.uniforms['specularMap'].value = value;
     }
 
     get specular() {
@@ -51798,10 +51873,6 @@ class DeferredMeshPhongMaterial extends ShaderMaterial {
     set shininess( value ) {
         this.#_shininess = value;
         this.uniforms['uShininess'].value = value;
-    }
-
-    get isDeferred() {
-        return true;
     }
 }
 

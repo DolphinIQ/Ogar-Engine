@@ -1,6 +1,8 @@
 
 const gBufferVertex = /*glsl*/`
 
+    uniform vec2 textureRepeat;
+
     out vec3 vPosition;
     out vec3 vNormal;
     out vec2 vUv;
@@ -61,7 +63,7 @@ const gBufferVertex = /*glsl*/`
 
         // vNormal = normalize( (modelMatrix * vec4( transformedNormal, 0.0 )).xyz ); // world space normal
         vNormal = normalize( (modelMatrix * vec4( vNormal, 0.0 )).xyz ); // world space normal
-        vUv = uv;
+        vUv = uv * textureRepeat;
         vPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz; // vec4 * matrix4 =/= matrix4 * vec4
 
         gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );

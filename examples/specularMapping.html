@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> Ogar Engine - Forward Rendering + Transparency </title>
+    <title> Ogar Engine - Specular Mapping </title>
 
     <link rel="stylesheet" href="css/examples.css">
 </head>
 <body>
 
-    <div class="info"> Combining deferred (cubes) and forward (sphere) rendered meshes together. Works with transparency. </div>
+    <div class="info"> Earth phong-shaded with diffuse, normal, specular and emissive maps </div>
 
     <script type="module">
         // ENGINE
@@ -26,7 +26,7 @@
         let engine, scene, camera, clock, delta, time;
         let orbitControls, stats, gui;
         let textureLoader;
-        let lightRotator;
+        let earthGlobe, lightRotator;
 
         init();
 
@@ -46,7 +46,7 @@
             scene = new OGAR.Scene();
 
             camera = new OGAR.PerspectiveCamera( 55, window.innerWidth / window.innerHeight, 0.5, 1000 );
-            camera.position.set( 0, 4, 8 );
+            camera.position.set( 0, 0, 8 );
 
             orbitControls = new Orbit( camera, {
                 Vector2: OGAR.Vector2,
@@ -65,38 +65,61 @@
             gui = new GUI();
             // gui.add(object, property, [min], [max], [step])
 
-            // Textures
+            // Loaders
             textureLoader = new OGAR.TextureLoader();
-            const diffuseTexture = textureLoader.load('textures/ogar_hi.png');
-            const normalMap = textureLoader.load('textures/normal_map.png');
 
-            // MESHES
-            const geometry = new OGAR.BoxBufferGeometry( 1, 1, 1 ); // cubes
+            addEarthGlobe();
+            addLights();
+
+            // Debug
+            gui.add({ f: () => { engine.visualizePointLightVolumes = !engine.visualizePointLightVolumes; } }, 'f' )
+                .name('Visualize point light volumes');
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            requestAnimationFrame( animate );
+        }
+
+        function addEarthGlobe() {
+
+            const diffuseTexture = textureLoader.load('textures/earth/Albedo.jpg');
+            const normalTexture = textureLoader.load('textures/earth/Normal.png');
+            const emissiveTexture = textureLoader.load('textures/earth/Emissive.png');
+            const specularTexture = textureLoader.load('textures/earth/Specular.png');
+
+            const NORMAL_SCALE = 0.7;
+            const geometry = new OGAR.SphereBufferGeometry( 2, 64, 32 );
             const material = new OGAR.DeferredMeshPhongMaterial({
-                shininess: 25,
+                shininess: 30,
                 map: diffuseTexture,
-                normalMap: normalMap
+                normalMap: normalTexture,
+                normalScale: new OGAR.Vector2( NORMAL_SCALE, NORMAL_SCALE ),
+                
+                specularMap: specularTexture,
+                emissiveMap: emissiveTexture,
+                emissive: new OGAR.Color( 0xffffff ),
+                emissiveIntensity: 0.5,
             });
 
-            const ROWS = 5;
-            const DISTANCE = 2;
-            addMeshesInGrid( ROWS, ROWS, DISTANCE, geometry, material, scene );
+            gui.add( material, 'shininess', 0, 50, 1 );
+            gui.add( material, 'bumpScale', 0, 2, 0.01 );
+            gui.addColor( { string: '#ffffff' }, 'string' ).onChange( ( value ) => {
+                material.emissive = value;
+            }).name('emissive');
+            gui.add( { normalScale: NORMAL_SCALE }, 'normalScale', 0, 2, 0.02 ).onChange( ( value ) => {
+                material.normalScale.set( value, value );
+            });
+            gui.add( material, 'emissiveIntensity', 0, 1, 0.01 );
+            
+            earthGlobe = new OGAR.Mesh( geometry, material );
+            console.log( 'earthGlobe:', earthGlobe );
+            scene.add( earthGlobe );
+        }
 
-            // FORWARD RENDERED MESH - just use a "normal" Three.js material
-            const forwardRenderedMesh = new OGAR.Mesh(
-                new OGAR.SphereGeometry( 2, 32, 32 ),
-                new OGAR.MeshPhongMaterial({
-                    color: 0xff0000,
-                    transparent: true,
-                    opacity: 0.8
-                })
-            );
-            scene.add( forwardRenderedMesh );
+        function addLights() {
 
-            // LIGHTS
-            const P_light = new OGAR.PointLight( 0xffffff, 20.0, 8, 2 );
-            P_light.position.set( 3, 2, 0 );
-            const H_light = new OGAR.HemisphereLight( 0xff0000, 0x00ff00, 0.6 );
+            const P_light = new OGAR.PointLight( 0xffffff, 12, 15, 2 );
+            P_light.position.set( -5, 0, 0 );
 
             const pointLightHelper = new OGAR.Mesh(
                 new OGAR.SphereBufferGeometry( 0.1, 8, 8 ),
@@ -107,28 +130,6 @@
             P_light.add( pointLightHelper );
             lightRotator.add( P_light );
             scene.add( lightRotator );
-            scene.add( H_light );
-
-            
-            // Debug
-            gui.add( forwardRenderedMesh.material, 'opacity', 0, 1, 0.01 ).name('Sphere opacity')
-            gui.add({ f: () => { engine.visualizePointLightVolumes = !engine.visualizePointLightVolumes; } }, 'f' )
-                .name('Visualize point light volumes');
-
-            window.addEventListener('resize', onWindowResize, false);
-
-            requestAnimationFrame( animate );
-        }
-
-        function addMeshesInGrid( rows, cols, distance, geometry, material, scene ) {
-            for( let i = 0; i < rows; i++ ) {
-                for( let j = 0; j < cols; j++ ) {
-                    const mesh = new OGAR.Mesh( geometry, material );
-                    mesh.position.x = distance * (j - (rows - 1) / 2);
-                    mesh.position.z = distance * (i - (cols - 1) / 2);
-                    scene.add( mesh );
-                }
-            }
         }
 
         function animate() {
@@ -138,7 +139,7 @@
             time = clock.getElapsedTime();
             orbitControls.update();
 
-            lightRotator.rotation.y += 0.8 * delta;
+            lightRotator.rotation.y += 0.3 * delta;
 
             engine.render( scene, camera );
 

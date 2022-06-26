@@ -19,6 +19,7 @@
 ## View the current examples:
 1. [Basic Scene](https://dolphiniq.github.io/Ogar-Engine/examples/basicScene)
 2. [Phong Material](https://dolphiniq.github.io/Ogar-Engine/examples/phongMaterial)
+3. [Specular Mapping Earth](https://dolphiniq.github.io/Ogar-Engine/examples/specularMapping)
 3. [Combining Deferred and Forward Rendering/Transparency](https://dolphiniq.github.io/Ogar-Engine/examples/forwardTransparency)
 4. [Thousands of Point Lights](https://dolphiniq.github.io/Ogar-Engine/examples/manyPointLights) (performance benchmarking example)
 5. [Loader/Exporter](https://dolphiniq.github.io/Ogar-Engine/examples/loaderExporter)
@@ -73,6 +74,14 @@ function animate() { // Inside your animation loop
     engine.render( scene, camera );
 }
 ```
+Please note OGAR relies on a fixed Three.js version (which is planned to keep being updated) and thus alongside it's calsses it encapsulates Three.js API whithin it's namespace. For example:
+```js
+const geometry = new OGAR.BoxGeometry();
+// ^ is the same in OGAR as:
+const geometry = new THREE.BoxGeometry();
+// ^ this in Three.js
+```
+If you see an API not documented in (https://threejs.org/docs), it is likely a new Ogar API. For example: `OGAR.DeferredMeshPhongMaterial` or `OGAR.Engine`. A list of new Ogar API and differences from Three.js API will be made once the engine reaches a stable version.
 
 ### 🕋 Export and Import binary .ogar files:
 (No practical usage yet)

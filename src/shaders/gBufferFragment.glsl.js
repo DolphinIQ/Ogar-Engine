@@ -8,7 +8,9 @@ const gBufferFragment = /*glsl*/`
 
     #include <map_pars_fragment>
     #include <emissivemap_pars_fragment>
+    #include <bumpmap_pars_fragment>
     #include <normalmap_pars_fragment>
+    #include <specularmap_pars_fragment>
 
     uniform float uCameraNear;
     uniform float uCameraFar;
@@ -37,6 +39,7 @@ const gBufferFragment = /*glsl*/`
 
         vec4 diffuseColor = vec4( uColor, 1.0 );
         vec3 totalEmissiveRadiance = uEmissive;
+        float specularColor = uSpecular;
 
         #ifdef USE_MAP
             vec4 texelColor = texture2D( map, uv );
@@ -50,22 +53,17 @@ const gBufferFragment = /*glsl*/`
             totalEmissiveRadiance *= emissiveColor.rgb;
         #endif
 
-
-        // #include <normal_fragment_begin> : edited start
-        float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
-        #ifdef FLAT_SHADED
-            // Workaround for Adreno GPUs not able to do dFdx( vViewPosition )
-            vec3 fdx = vec3( dFdx( vViewPosition.x ), dFdx( vViewPosition.y ), dFdx( vViewPosition.z ) );
-            vec3 fdy = vec3( dFdy( vViewPosition.x ), dFdy( vViewPosition.y ), dFdy( vViewPosition.z ) );
-            vec3 normal = normalize( cross( fdx, fdy ) );
+        // #include <specularmap_fragment>
+        float specularStrength;
+        #ifdef USE_SPECULARMAP
+            vec4 texelSpecular = texture2D( specularMap, vUv );
+            specularStrength = texelSpecular.r;
         #else
-            vec3 normal = normalize( vNormal ); // world normal
-
-            #ifdef DOUBLE_SIDED
-                normal = normal * faceDirection;
-            #endif
+            specularStrength = 1.0;
         #endif
-        // #include <normal_fragment_begin> : edited end
+        specularColor *= specularStrength;
+
+        #include <normal_fragment_begin>
 
         // #include <normal_fragment_maps> : edited start
         #ifdef OBJECTSPACE_NORMALMAP
@@ -81,7 +79,7 @@ const gBufferFragment = /*glsl*/`
 
             // normal = normalize( normalMatrix * normal );
 
-            no support for objectspace normal map
+            no_support_for_objectspace_normal_map
 
         #elif defined( TANGENTSPACE_NORMALMAP )
 
@@ -104,7 +102,7 @@ const gBufferFragment = /*glsl*/`
 
         // Write position, depth, normal, shading and color data to G-Buffer
         gPosition = vec4( position, depth );
-        gNormal = vec4( normal, uSpecular );
+        gNormal = vec4( normal, specularColor );
         gColor = diffuseColor;
         gEmissive = vec4( totalEmissiveRadiance, uShininess );
     }
